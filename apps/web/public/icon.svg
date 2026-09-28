@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Motoro">
+  <rect width="512" height="512" rx="112" fill="#ffd100" />
+  <path
+    d="M136 366 V146 L256 294 L376 146 V366"
+    fill="none"
+    stroke="#14161c"
+    stroke-width="52"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

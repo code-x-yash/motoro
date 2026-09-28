@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  @apply bg-canvas text-ink antialiased;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  @apply bg-sun-300 text-ink;
+}
+
+@layer components {
+  .page-container {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+  .page-title {
+    @apply text-xl font-semibold tracking-tight text-ink sm:text-2xl;
+  }
+  .page-subtitle {
+    @apply mt-1 text-sm text-slate-500;
+  }
+  .grid-stat {
+    @apply grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4;
+  }
+  .input-label {
+    @apply mb-1 block text-xs font-medium text-slate-600;
+  }
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-medium ring-1 ring-inset;
+  }
+  .skeleton {
+    @apply animate-pulse rounded-md bg-slate-200/80;
+  }
+  /* Bright, app-like primitives used across marketing + product modules */
+  .section-eyebrow {
+    @apply inline-flex items-center gap-2 rounded-full bg-sun-300 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-ink;
+  }
+  .section-title {
+    @apply text-2xl font-bold tracking-tight text-ink sm:text-3xl;
+  }
+  .card-bright {
+    @apply rounded-2xl bg-white shadow-card ring-1 ring-slate-900/5;
+  }
+  .hero-wash {
+    background:
+      radial-gradient(60rem 30rem at 85% -10%, rgba(255, 209, 0, 0.55), transparent 60%),
+      radial-gradient(50rem 26rem at 10% 110%, rgba(255, 103, 51, 0.35), transparent 60%),
+      linear-gradient(180deg, #fffdf5 0%, #fbfaf7 100%);
+  }
+}
+
+/* Map canvas: gridded surface under the map, doubles as the offline fallback */
+.map-canvas {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.25) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.25) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+/* Let the .map-canvas grid show through when tiles are unavailable */
+.leaflet-container {
+  background: transparent;
+  font: inherit;
+}
+
+.leaflet-container .leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.85);
+  font-size: 10px;
+}
+
+.leaflet-container a {
+  color: #b22c07;
+}

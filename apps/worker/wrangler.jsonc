@@ -1,0 +1,104 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "motoro-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "dev": {
+    "port": 8787
+  },
+  "vars": {
+    "ENVIRONMENT": "development",
+    "ALLOWED_ORIGINS": "http://localhost:3000,http://localhost:3001,http://localhost:3002,http://localhost:3003,http://localhost:3004,http://localhost:3005,http://127.0.0.1:3000,http://127.0.0.1:3001,http://127.0.0.1:3005",
+    "ENABLE_SEED_ROUTES": "true",
+    "PAYMENT_PROVIDER": "test",
+    "SESSION_COOKIE_NAME": "rr_session",
+    "SESSION_SECRET": "dev-only-session-secret-not-for-production"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "motoro",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "motoro_kv_local"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "motoro-files"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "TASKS",
+        "queue": "motoro-tasks"
+      },
+      {
+        "binding": "TASKS_DLQ",
+        "queue": "motoro-tasks-dlq"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "motoro-tasks",
+        "max_retries": 3,
+        "dead_letter_queue": "motoro-tasks-dlq",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5
+      }
+    ]
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "EMERGENCY_ROOM",
+        "class_name": "EmergencyRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["EmergencyRoom"]
+    }
+  ],
+  "triggers": {
+    "crons": ["* * * * *"]
+  },
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "staging": {
+      "name": "motoro-api-staging",
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "ENABLE_SEED_ROUTES": "false",
+        "ALLOWED_ORIGINS": "https://staging.motoro.example,http://localhost:3000",
+        "PAYMENT_PROVIDER": "test",
+        "SESSION_COOKIE_NAME": "rr_session",
+        "SESSION_SECRET": "staging-session-secret-replace-me"
+      }
+    },
+    "production": {
+      "name": "motoro-api",
+      "vars": {
+        "ENVIRONMENT": "production",
+        "ENABLE_SEED_ROUTES": "false",
+        "ALLOWED_ORIGINS": "https://motoro.example",
+        "PAYMENT_PROVIDER": "test",
+        "SESSION_COOKIE_NAME": "rr_session"
+      }
+    }
+  }
+}

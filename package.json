@@ -1,0 +1,43 @@
+{
+  "name": "motoro",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Motoro - reliable 24x7 roadside assistance and mechanic dispatch platform",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n worker,web -c blue,green \"npm run dev --workspace @rr/worker\" \"npm run dev --workspace @rr/web\"",
+    "dev:worker": "npm run dev --workspace @rr/worker",
+    "dev:web": "npm run dev --workspace @rr/web",
+    "build": "npm run typecheck && npm run build --workspace @rr/web",
+    "lint": "eslint .",
+    "typecheck": "npm run typecheck --workspace @rr/config && npm run typecheck --workspace @rr/validation && npm run typecheck --workspace @rr/types && npm run typecheck --workspace @rr/ui && npm run typecheck --workspace @rr/worker && npm run typecheck --workspace @rr/web",
+    "test": "vitest run && npm run test:integration",
+    "test:integration": "npm run test --workspace @rr/worker",
+    "test:watch": "vitest",
+    "db:migrate:local": "wrangler d1 migrations apply motoro --local -c apps/worker/wrangler.jsonc",
+    "db:migrate:remote": "wrangler d1 migrations apply motoro --remote -c apps/worker/wrangler.jsonc",
+    "db:create": "wrangler d1 create motoro -c apps/worker/wrangler.jsonc",
+    "seed": "node scripts/seed.mjs",
+    "demo": "node scripts/demo.mjs",
+    "worker:dev": "wrangler dev -c apps/worker/wrangler.jsonc",
+    "deploy:worker": "wrangler deploy -c apps/worker/wrangler.jsonc",
+    "preview": "npm run build && npm run dev"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.8.14",
+    "@eslint/js": "^9.17.0",
+    "@types/node": "^22.10.2",
+    "concurrently": "^9.1.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.18.1",
+    "vitest": "~3.2.4",
+    "wrangler": "^4.142.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
