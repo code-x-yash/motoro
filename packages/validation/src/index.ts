@@ -97,6 +97,18 @@ export const updateProfileSchema = z.object({
   locale: localeSchema.optional(),
 });
 
+/** Per-channel notification opt-in/out (absent key = enabled). */
+export const updatePreferencesSchema = z.object({
+  notifications: z
+    .object({
+      EMAIL: z.boolean().optional(),
+      SMS: z.boolean().optional(),
+      WHATSAPP: z.boolean().optional(),
+      PUSH: z.boolean().optional(),
+    })
+    .strict(),
+});
+
 // ---------------------------------------------------------------------------
 // Vehicles
 // ---------------------------------------------------------------------------
@@ -186,10 +198,20 @@ export const dispatchRespondSchema = z.object({
 });
 
 export const nearbyMechanicsSchema = z.object({
-  latitude: latitudeSchema,
-  longitude: longitudeSchema,
+  latitude: z.coerce.number().min(-90, 'Latitude out of range').max(90, 'Latitude out of range'),
+  longitude: z.coerce.number().min(-180, 'Longitude out of range').max(180, 'Longitude out of range'),
   radiusKm: z.coerce.number().min(0.1).max(200).default(10),
   issueType: z.enum(ISSUE_TYPES).optional(),
+});
+
+export const reverseGeocodeSchema = z.object({
+  latitude: z.coerce.number().min(-90, 'Latitude out of range').max(90, 'Latitude out of range'),
+  longitude: z.coerce.number().min(-180, 'Longitude out of range').max(180, 'Longitude out of range'),
+});
+
+export const geocodeSearchSchema = z.object({
+  query: z.string().trim().min(2, 'Type at least 2 characters').max(200),
+  limit: z.coerce.number().int().min(1).max(5).default(5),
 });
 
 // ---------------------------------------------------------------------------
@@ -421,4 +443,62 @@ export type CreateEmergencyInput = z.infer<typeof createEmergencySchema>;
 export type CreateQuoteInput = z.infer<typeof createQuoteSchema>;
 export type CreateDiagnosisInput = z.infer<typeof createDiagnosisSchema>;
 export type CreateReviewInput = z.infer<typeof createReviewSchema>;
+
+export const createDisputeSchema = z.object({
+  requestId: z.string().min(1).max(64),
+  category: z.enum(['SERVICE_QUALITY', 'OVERCHARGING', 'NO_SHOW', 'VEHICLE_DAMAGE', 'SAFETY', 'OTHER']),
+  reason: z.string().trim().min(10).max(2000),
+});
+
+export type CreateDisputeInput = z.infer<typeof createDisputeSchema>;
+
+export const applyCouponSchema = z.object({
+  code: z.string().trim().min(3, 'Enter a coupon code').max(40),
+});
+
+export const createCouponSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(3)
+    .max(40)
+    .regex(/^[A-Za-z0-9_-]+$/, 'Code may contain letters, numbers, - and _')
+    .transform((value) => value.toUpperCase()),
+  description: z.string().trim().max(200).nullable().optional(),
+  percentOff: z.number().int().min(1).max(100),
+  minAmountCents: z.number().int().min(0).default(0),
+  maxUses: z.number().int().min(1).nullable().optional(),
+  validFrom: z.string().datetime().nullable().optional(),
+  validUntil: z.string().datetime().nullable().optional(),
+});
+
+export type CreateCouponInput = z.infer<typeof createCouponSchema>;
+
+export const payoutAccountSchema = z.object({
+  accountHolder: z.string().trim().min(3, 'Enter the account holder name').max(120),
+  accountNumber: z.string().trim().min(6).max(34),
+  ifsc: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, 'Enter a valid IFSC code'),
+  bankName: z.string().trim().max(120).optional(),
+});
+
+export const requestPayoutSchema = z.object({
+  amountCents: z.number().int().min(10_000, 'Minimum payout is ₹100'),
+  note: z.string().trim().max(200).nullable().optional(),
+});
+
+export const sendMessageSchema = z.object({
+  body: z.string().trim().min(1, 'Message cannot be empty').max(1000),
+});
+
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url().max(2048),
+  keys: z.object({
+    p256dh: z.string().min(10).max(200),
+    auth: z.string().min(10).max(200),
+  }),
+});
 export type PresignUploadInput = z.infer<typeof presignUploadSchema>;

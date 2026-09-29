@@ -213,6 +213,11 @@ export interface EmergencyRequestDto {
   urgency: Urgency;
   status: RequestStatus;
   channel: RequestChannel;
+  /** Coupon applied at payment time (discount already reflected in totals). */
+  couponCode: string | null;
+  couponDiscountCents: number;
+  /** Photos attached by the driver when creating the request. */
+  photos: JobPhotoDto[];
   accidentMode: AccidentModeDto | null;
   latitude: number;
   longitude: number;
@@ -403,12 +408,26 @@ export interface PaymentDto {
   paidAt: string | null;
 }
 
+export interface DisputeDto {
+  id: string;
+  requestId: string;
+  reference: string | null;
+  raisedBy: string;
+  category: string;
+  reason: string;
+  status: 'OPEN' | 'IN_REVIEW' | 'RESOLVED' | 'DISMISSED';
+  resolution: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
 export interface InvoiceDto {
   id: string;
   number: string;
   requestId: string;
   subtotalCents: number;
   taxCents: number;
+  discountCents: number;
   totalCents: number;
   status: 'ISSUED' | 'PAID' | 'VOID';
   pdfUrl: string | null;
@@ -514,6 +533,7 @@ export type RealtimeEventType =
   | 'job.updated'
   | 'presence'
   | 'notification'
+  | 'chat.message'
   | 'error';
 
 export interface RealtimeServerMessage {
