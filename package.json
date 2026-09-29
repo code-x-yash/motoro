@@ -8,7 +8,7 @@
     "apps/*"
   ],
   "scripts": {
-    "dev": "concurrently -n worker,web -c blue,green \"npm run dev --workspace @rr/worker\" \"npm run dev --workspace @rr/web\"",
+    "dev": "node scripts/ensure-out.mjs && concurrently -n worker,web -c blue,green \"npm run dev --workspace @rr/worker\" \"npm run dev --workspace @rr/web\"",
     "dev:worker": "npm run dev --workspace @rr/worker",
     "dev:web": "npm run dev --workspace @rr/web",
     "build": "npm run typecheck && npm run build --workspace @rr/web",
@@ -21,9 +21,12 @@
     "db:migrate:remote": "wrangler d1 migrations apply motoro --remote -c apps/worker/wrangler.jsonc",
     "db:create": "wrangler d1 create motoro -c apps/worker/wrangler.jsonc",
     "seed": "node scripts/seed.mjs",
+    "seed:remote": "node scripts/seed-remote.mjs",
     "demo": "node scripts/demo.mjs",
     "worker:dev": "wrangler dev -c apps/worker/wrangler.jsonc",
-    "deploy:worker": "wrangler deploy -c apps/worker/wrangler.jsonc",
+    "build:web": "node scripts/build-web.mjs",
+    "deploy": "node scripts/build-web.mjs && wrangler deploy --env production -c apps/worker/wrangler.jsonc",
+    "deploy:worker": "wrangler deploy --env production -c apps/worker/wrangler.jsonc",
     "preview": "npm run build && npm run dev"
   },
   "devDependencies": {
