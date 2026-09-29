@@ -69,7 +69,7 @@ function HistoryContent() {
 
       <div className="space-y-3">
         {filtered.map((item) => (
-          <Link key={item.id} href={`/requests/${item.id}`}>
+          <Link key={item.id} href={`/requests/detail?id=${item.id}`}>
             <Card className="mb-3 transition-colors hover:border-brand-300">
               <CardContent className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">

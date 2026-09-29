@@ -141,3 +141,55 @@ addEventListener('fetch', (event) => {
     event.respondWith(cacheFirst(request));
   }
 });
+
+// ---------------------------------------------------------------------------
+// Web Push (payload is encrypted aes128gcm JSON from the worker)
+// ---------------------------------------------------------------------------
+
+function defaultUrlForType(type) {
+  if (type === 'JOB_OFFER' || type === 'DISPATCH_TIMEOUT') return '/mechanic';
+  return '/notifications';
+}
+
+addEventListener('push', (event) => {
+  let payload = { title: 'Motoro', body: 'You have a new notification' };
+  try {
+    const data = event.data ? event.data.json() : null;
+    if (data && typeof data === 'object') {
+      payload = {
+        title: data.title || payload.title,
+        body: data.body || payload.body,
+        url: data.url || defaultUrlForType(data.type),
+      };
+    }
+  } catch (err) {
+    if (event.data) payload.body = event.data.text();
+    else void err;
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/icon.svg',
+      badge: '/icon-maskable.svg',
+      data: { url: payload.url },
+    }),
+  );
+});
+
+addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const target = (event.notification.data && event.notification.data.url) || '/notifications';
+  event.waitUntil(
+    clients
+      .matchAll({ type: 'window', includeUncontrolled: true })
+      .then((list) => {
+        for (const client of list) {
+          if ('focus' in client) {
+            void client.navigate(target);
+            return client.focus();
+          }
+        }
+        return clients.openWindow(target);
+      }),
+  );
+});

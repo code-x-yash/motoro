@@ -37,6 +37,8 @@ function ProfileContent() {
   const [contacts, setContacts] = useState<EmergencyContactDto[]>([]);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState(false);
+  const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
+  const [notifSaved, setNotifSaved] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -47,6 +49,9 @@ function ProfileContent() {
       .then((data) => setContacts(data.items ?? []))
       .catch(() => undefined)
       .finally(() => setLoaded(true));
+    void apiGet<{ notifications: Record<string, boolean> }>('/api/me/preferences')
+      .then((data) => setNotifPrefs(data.notifications ?? {}))
+      .catch(() => undefined);
   }, [user]);
 
   if (!user) return <LoadingState />;
@@ -88,6 +93,34 @@ function ProfileContent() {
       setFields(fieldErrors(err));
     }
   };
+
+  const toggleChannel = async (channel: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH', enabled: boolean) => {
+    setNotifSaved(false);
+    const previous = notifPrefs;
+    setNotifPrefs((prev) => {
+      const next = { ...prev };
+      if (enabled) delete next[channel];
+      else next[channel] = false;
+      return next;
+    });
+    try {
+      const data = await apiPatch<{ notifications: Record<string, boolean> }>('/api/me/preferences', {
+        notifications: { [channel]: enabled },
+      });
+      setNotifPrefs(data.notifications ?? {});
+      setNotifSaved(true);
+    } catch (err) {
+      setNotifPrefs(previous);
+      setFields(fieldErrors(err));
+    }
+  };
+
+  const CHANNELS: Array<{ key: 'EMAIL' | 'SMS' | 'WHATSAPP' | 'PUSH'; label: string; hint: string }> = [
+    { key: 'EMAIL', label: 'Email', hint: 'Quotes, invoices and account alerts' },
+    { key: 'SMS', label: 'SMS', hint: 'OTPs, dispatch and ETA updates' },
+    { key: 'WHATSAPP', label: 'WhatsApp', hint: 'Quick status messages' },
+    { key: 'PUSH', label: 'Push', hint: 'Browser push notifications' },
+  ];
 
   return (
     <div className="grid max-w-5xl gap-5 lg:grid-cols-3">
@@ -149,6 +182,43 @@ function ProfileContent() {
                 <Button type="submit">Save profile</Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Notifications</CardTitle>
+            <span className="text-xs text-slate-500">In-app alerts are always on. Choose where else to reach you.</span>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="flex items-center justify-between gap-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2">
+              <div>
+                <p className="text-sm font-medium text-slate-800">In-app</p>
+                <p className="text-xs text-slate-500">Bell inbox and live updates</p>
+              </div>
+              <input type="checkbox" checked disabled className="h-4 w-4 accent-slate-400" aria-label="In-app enabled" />
+            </div>
+            {CHANNELS.map((channel) => {
+              const enabled = notifPrefs[channel.key] !== false;
+              return (
+                <label
+                  key={channel.key}
+                  className="flex cursor-pointer items-center justify-between gap-3 rounded-lg border border-slate-100 px-3 py-2 hover:bg-slate-50"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{channel.label}</p>
+                    <p className="text-xs text-slate-500">{channel.hint}</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={enabled}
+                    onChange={(event) => void toggleChannel(channel.key, event.target.checked)}
+                    className="h-4 w-4 accent-brand-600"
+                  />
+                </label>
+              );
+            })}
+            {notifSaved ? <p className="text-xs font-medium text-emerald-600">Preferences saved.</p> : null}
           </CardContent>
         </Card>
 

@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { MechanicProfileDto } from '@rr/types';
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, LoadingState, Select, Textarea } from '@rr/ui';
 import { AppShell } from '@/components/app-shell';
 import { apiDelete, apiGet, apiPatch, apiPost, errorMessage, fieldErrors } from '@/lib/api';
+import { MAX_UPLOAD_BYTES, UPLOAD_TYPES, uploadToR2 } from '@/lib/uploads';
 
 interface AvailabilitySlot {
   id: string;
@@ -48,6 +49,8 @@ function MechanicSettings() {
   const [radius, setRadius] = useState('10');
   const [experience, setExperience] = useState('3');
   const [documentKey, setDocumentKey] = useState('');
+  const [documentUrl, setDocumentUrl] = useState<string | null>(null);
+  const [docBusy, setDocBusy] = useState(false);
 
   const [slot, setSlot] = useState({ day: '1', start: '09:00', end: '18:00' });
 
@@ -64,6 +67,8 @@ function MechanicSettings() {
       setAddress(profileData.address ?? '');
       setRadius(String(profileData.serviceRadiusKm));
       setExperience(String(profileData.experienceYears));
+      setDocumentKey('');
+      setDocumentUrl(profileData.documentUrl ?? null);
       setSlots(slotData.items);
       setError(null);
     } catch (err) {
@@ -116,6 +121,33 @@ function MechanicSettings() {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const uploadDocument = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!(UPLOAD_TYPES as readonly string[]).includes(file.type)) {
+      setError('The document must be a JPG, PNG or WEBP image.');
+      input.value = '';
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError('The document must be 8 MB or smaller.');
+      input.value = '';
+      return;
+    }
+    setDocBusy(true);
+    setError(null);
+    try {
+      setDocumentKey(await uploadToR2(file, 'verification'));
+      setDocumentUrl(null);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setDocBusy(false);
+      input.value = '';
     }
   };
 
@@ -174,8 +206,31 @@ function MechanicSettings() {
                 <Field label="Experience (years)" error={fields.experienceYears}>
                   <Input type="number" min={0} max={60} value={experience} onChange={(event) => setExperience(event.target.value)} />
                 </Field>
-                <Field label="Document key (optional)" error={fields.documentKey} hint="Presigned R2 key of your licence/ID">
-                  <Input value={documentKey} onChange={(event) => setDocumentKey(event.target.value)} />
+                <Field
+                  label="Verification document"
+                  error={fields.documentKey}
+                  hint="Licence, ID or insurance — JPG, PNG or WEBP up to 8 MB."
+                >
+                  <input
+                    type="file"
+                    accept={UPLOAD_TYPES.join(',')}
+                    onChange={(event) => void uploadDocument(event)}
+                    disabled={busy || docBusy}
+                    className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-brand-700 hover:file:bg-brand-100"
+                  />
+                  {docBusy ? <p className="mt-1 text-xs text-slate-500">Uploading…</p> : null}
+                  {documentKey ? (
+                    <p className="mt-1 text-xs text-emerald-700">
+                      New document ready — it is attached when you submit for review.
+                    </p>
+                  ) : documentUrl ? (
+                    <p className="mt-1 text-xs text-slate-500">
+                      Document on file ·{' '}
+                      <a href={documentUrl} target="_blank" rel="noreferrer" className="font-medium text-brand-700 underline">
+                        View
+                      </a>
+                    </p>
+                  ) : null}
                 </Field>
               </div>
               <Field label="Workshop / pickup address" error={fields.address}>

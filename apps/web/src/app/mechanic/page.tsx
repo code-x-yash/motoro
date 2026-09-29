@@ -247,7 +247,7 @@ function MechanicBoard() {
                       >
                         Decline
                       </Button>
-                      <Link href={`/requests/${offer.requestId}`} className="ml-auto text-xs text-brand-700 hover:underline">
+                      <Link href={`/requests/detail?id=${offer.requestId}`} className="ml-auto text-xs text-brand-700 hover:underline">
                         Details
                       </Link>
                     </div>
@@ -285,7 +285,7 @@ function MechanicBoard() {
                     </div>
                     <p className="text-xs text-slate-500">Job {job.id.slice(0, 8)} · request {job.requestId.slice(0, 8)}</p>
                   </div>
-                  <Link href={`/mechanic/jobs/${job.id}`}>
+                  <Link href={`/mechanic/jobs/detail?id=${job.id}`}>
                     <Button size="sm" variant="secondary">
                       Open workbench <ArrowRight className="h-3.5 w-3.5" />
                     </Button>

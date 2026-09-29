@@ -142,7 +142,7 @@ export default function HelpPage() {
   const year = new Date().getFullYear();
 
   return (
-    <AppShell>
+    <AppShell allowAnonymous>
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="animate-fade-up flex flex-wrap items-end justify-between gap-4">
           <div>
@@ -300,7 +300,14 @@ export default function HelpPage() {
         </details>
 
         <footer className="border-t border-slate-200 pt-4 text-center text-xs text-slate-400">
-          © {year} {BRAND.name}
+          © {year} {BRAND.name} ·{' '}
+          <Link href="/privacy" className="hover:underline">
+            Privacy
+          </Link>{' '}
+          ·{' '}
+          <Link href="/terms" className="hover:underline">
+            Terms
+          </Link>
         </footer>
       </div>
     </AppShell>

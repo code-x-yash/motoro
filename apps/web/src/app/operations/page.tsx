@@ -279,7 +279,7 @@ function OperationsConsole() {
                             <Button size="sm" variant="secondary" onClick={() => void openDetail(item.id)}>
                               Manage
                             </Button>
-                            <Link href={`/requests/${item.id}`}>
+                            <Link href={`/requests/detail?id=${item.id}`}>
                               <Button size="sm" variant="ghost">
                                 Open
                               </Button>
@@ -557,7 +557,7 @@ function OpsActions({
         <Button variant="secondary" disabled={busy} onClick={onEscalate}>
           <Radio className="h-4 w-4" /> Escalate
         </Button>
-        <Link href={`/requests/${requestId}`}>
+          <Link href={`/requests/detail?id=${requestId}`}>
           <Button variant="ghost">Full session</Button>
         </Link>
       </div>

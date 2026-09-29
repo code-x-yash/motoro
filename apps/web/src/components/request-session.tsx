@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import type {
+  DisputeDto,
   EmergencyContactDto,
   EmergencyRequestDto,
+  InvoiceDto,
   RealtimeServerMessage,
   TimelineEventDto,
 } from '@rr/types';
@@ -16,9 +18,11 @@ import {
   CardHeader,
   CardTitle,
   Field,
+  Input,
   LoadingState,
   Modal,
   Rating,
+  Select,
   StatusBadge,
   Textarea,
   UrgencyBadge,
@@ -26,12 +30,45 @@ import {
 } from '@rr/ui';
 import { Check, Clock, MapPin, Navigation, Share2, ShieldAlert, XCircle } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
+import { DEFAULT_CONFIG, formatMoney } from '@rr/config';
 import { useRealtime } from '@/lib/realtime';
 import { formatDateTime, formatINR, titleCase } from '@/lib/format';
 import { PROGRESS_STEPS, progressStepIndex } from '@/lib/progress';
 import { MapPanel, type MapMarker, type MapRouteInfo } from '@/components/map-panel';
 
+declare global {
+  interface Window {
+    Razorpay?: new (options: Record<string, unknown>) => {
+      open(): void;
+      on(event: string, handler: (response: { error?: { description?: string } }) => void): void;
+    };
+  }
+}
+
+interface ReviewEntry {
+  id: string;
+  reviewerUserId: string;
+  revieweeName: string;
+  overall: number;
+  categories: Record<string, number>;
+  comment: string | null;
+  createdAt: string;
+}
+
+interface ChatMessage {
+  id: string;
+  requestId: string;
+  senderUserId: string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+  readAt: string | null;
+}
+
 export function RequestSession({ requestId }: { requestId: string }) {
+  const { user } = useAuth();
+  const readOnlyViewer = user?.role === 'MECHANIC' || user?.role === 'WORKSHOP';
   const [request, setRequest] = useState<EmergencyRequestDto | null>(null);
   const [timeline, setTimeline] = useState<TimelineEventDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -48,6 +85,31 @@ export function RequestSession({ requestId }: { requestId: string }) {
   const [contacts, setContacts] = useState<EmergencyContactDto[]>([]);
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [disputes, setDisputes] = useState<DisputeDto[]>([]);
+  const [reviews, setReviews] = useState<ReviewEntry[]>([]);
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; discountCents: number } | null>(null);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [disputeOpen, setDisputeOpen] = useState(false);
+  const [disputeCategory, setDisputeCategory] = useState('SERVICE_QUALITY');
+  const [disputeReason, setDisputeReason] = useState('');
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatInput, setChatInput] = useState('');
+  const [chatBusy, setChatBusy] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const [invoice, setInvoice] = useState<InvoiceDto | null>(null);
+  const [invoicePayments, setInvoicePayments] = useState<
+    Array<{
+      id: string;
+      provider: string;
+      status: string;
+      amountCents: number;
+      method: string;
+      paidAt: string | null;
+      createdAt: string;
+    }>
+  >([]);
 
   useEffect(() => {
     if (!shareOpen) return;
@@ -73,6 +135,15 @@ export function RequestSession({ requestId }: { requestId: string }) {
       setRequest(dto);
       const list = Array.isArray(events) ? events : (events as { items?: TimelineEventDto[] }).items;
       setTimeline(list ?? []);
+      apiGet<{ items?: DisputeDto[] }>(`/api/disputes?requestId=${requestId}`)
+        .then((data) => setDisputes(data.items ?? []))
+        .catch(() => undefined);
+      apiGet<{ items?: ReviewEntry[] }>(`/api/reviews?requestId=${requestId}`)
+        .then((data) => setReviews(data.items ?? []))
+        .catch(() => undefined);
+      apiGet<{ items?: ChatMessage[] }>(`/api/emergencies/${requestId}/messages`)
+        .then((data) => setMessages(data.items ?? []))
+        .catch(() => undefined);
       setError(null);
     } catch (err) {
       setError(errorMessage(err));
@@ -86,6 +157,32 @@ export function RequestSession({ requestId }: { requestId: string }) {
     const timer = setInterval(() => void load(), 6000);
     return () => clearInterval(timer);
   }, [load]);
+
+  useEffect(() => {
+    if (!request || request.paymentStatus !== 'PAID') return;
+    let cancelled = false;
+    void apiGet<{
+      invoice: InvoiceDto | null;
+      payments?: Array<{
+        id: string;
+        provider: string;
+        status: string;
+        amountCents: number;
+        method: string;
+        paidAt: string | null;
+        createdAt: string;
+      }>;
+    }>(`/api/emergencies/${request.id}/invoice`)
+      .then((data) => {
+        if (cancelled) return;
+        setInvoice(data.invoice);
+        setInvoicePayments(data.payments ?? []);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [request?.id, request?.paymentStatus]);
 
   const onMessage = useCallback(
     (message: RealtimeServerMessage) => {
@@ -101,6 +198,14 @@ export function RequestSession({ requestId }: { requestId: string }) {
         }
       }
       if (message.type === 'request.event') void load();
+      if (message.type === 'quote.updated' || message.type === 'job.updated') void load();
+      if (message.type === 'chat.message') {
+        const payload = message.payload as { message?: ChatMessage };
+        if (payload.message) {
+          const incoming = payload.message;
+          setMessages((prev) => (prev.some((m) => m.id === incoming.id) ? prev : [...prev, incoming]));
+        }
+      }
     },
     [load],
   );
@@ -117,6 +222,114 @@ export function RequestSession({ requestId }: { requestId: string }) {
       setActionError(errorMessage(err));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const canChat = Boolean(
+    user && request && (user.id === request.driverUserId || user.id === request.assignedMechanicUserId),
+  );
+
+  const sendChat = async (event: FormEvent) => {
+    event.preventDefault();
+    const body = chatInput.trim();
+    if (!body || chatBusy) return;
+    setChatBusy(true);
+    setChatError(null);
+    try {
+      const data = await apiPost<{ message: ChatMessage }>(`/api/emergencies/${requestId}/messages`, { body });
+      const sent = data.message;
+      setMessages((prev) => (prev.some((m) => m.id === sent.id) ? prev : [...prev, sent]));
+      setChatInput('');
+    } catch (err) {
+      setChatError(errorMessage(err));
+    } finally {
+      setChatBusy(false);
+    }
+  };
+
+  interface CheckoutPayload {
+    key: string;
+    orderId: string;
+    amountCents: number;
+    currency: string;
+    name: string;
+  }
+  interface PaymentCreateResponse {
+    payment?: { status?: string; checkout?: CheckoutPayload | null };
+  }
+
+  const loadRazorpayScript = () =>
+    new Promise<boolean>((resolve) => {
+      if (typeof window === 'undefined') return resolve(false);
+      if (window.Razorpay) return resolve(true);
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+
+  const startOnlinePayment = async (method: 'UPI' | 'CARD') => {
+    await run(async () => {
+      const data = await apiPost<PaymentCreateResponse>(`/api/emergencies/${request!.id}/payment`, {
+        method,
+        ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
+      });
+      const checkout = data.payment?.checkout;
+      if (!checkout) return; // Settled instantly (test provider) or nothing to open.
+
+      const loaded = await loadRazorpayScript();
+      const RazorpayCtor = window.Razorpay;
+      if (!loaded || !RazorpayCtor) {
+        throw new Error('Could not load the payment checkout. Please pay by cash instead.');
+      }
+      await new Promise<void>((resolve, reject) => {
+        const rzp = new RazorpayCtor({
+          key: checkout.key,
+          amount: checkout.amountCents,
+          currency: checkout.currency,
+          name: checkout.name,
+          order_id: checkout.orderId,
+          prefill: { name: request?.driverName ?? undefined },
+          theme: { color: '#d93809' },
+          modal: { ondismiss: () => reject(new Error('Payment cancelled.')) },
+          handler: (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) => {
+            void apiPost(`/api/emergencies/${request!.id}/payment/verify`, {
+              orderId: response.razorpay_order_id,
+              paymentId: response.razorpay_payment_id,
+              signature: response.razorpay_signature,
+            })
+              .then(() => resolve())
+              .catch((err) => reject(err));
+          },
+        });
+        rzp.on('payment.failed', (response: { error?: { description?: string } }) =>
+          reject(new Error(response.error?.description ?? 'Payment failed.')),
+        );
+        rzp.open();
+      });
+    });
+  };
+
+  const previewCoupon = async () => {
+    if (!couponInput.trim() || !request) return;
+    setCouponBusy(true);
+    setCouponError(null);
+    try {
+      const data = await apiPost<{ coupon: { code: string; discountCents: number } }>(
+        `/api/emergencies/${request.id}/coupon/preview`,
+        { code: couponInput.trim() },
+      );
+      setAppliedCoupon(data.coupon);
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(errorMessage(err));
+    } finally {
+      setCouponBusy(false);
     }
   };
 
@@ -144,8 +357,14 @@ export function RequestSession({ requestId }: { requestId: string }) {
 
   const job = request.job;
   const quote = request.quote;
-  const canPay = ['COMPLETED', 'PAYMENT_PENDING'].includes(request.status) && request.paymentStatus !== 'PAID';
-  const canReview = request.status === 'PAID' && !request.rating;
+  const feeDue =
+    request.status === 'CANCELLED' &&
+    request.paymentStatus === 'PENDING' &&
+    (request.totalAmountCents ?? 0) > 0;
+  const canPay =
+    !readOnlyViewer &&
+    ((['COMPLETED', 'PAYMENT_PENDING'].includes(request.status) && request.paymentStatus !== 'PAID') || feeDue);
+  const canReview = !readOnlyViewer && request.status === 'PAID' && !request.rating;
 
   const arrivalOtp =
     typeof request.arrivalOtp === 'string' && request.arrivalOtp.trim().length > 0 ? request.arrivalOtp.trim() : null;
@@ -185,6 +404,28 @@ export function RequestSession({ requestId }: { requestId: string }) {
       </div>
 
       <ProgressStrip status={request.status} />
+
+      {request.photos && request.photos.length > 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Breakdown photos</CardTitle>
+            <span className="text-xs text-slate-500">Attached when the request was created.</span>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {request.photos.map((photo) => (
+                <a key={photo.id} href={photo.url ?? '#'} target="_blank" rel="noreferrer">
+                  <img
+                    src={photo.url ?? ''}
+                    alt={photo.caption ?? `Breakdown photo (${photo.stage.toLowerCase()})`}
+                    className="h-24 w-24 rounded-lg border border-slate-200 object-cover transition hover:opacity-80"
+                  />
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {showArrivalOtp && arrivalOtp ? (
         <Card className="border-2 border-sun-300 bg-sun-300/20">
@@ -279,26 +520,30 @@ export function RequestSession({ requestId }: { requestId: string }) {
                     </div>
                   ))}
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="success"
-                    loading={busy}
-                    onClick={() =>
-                      run(() => apiPost(`/api/jobs/${job.id}/quote/approve`, { decision: 'APPROVED' }))
-                    }
-                  >
-                    Approve quote
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    loading={busy}
-                    onClick={() =>
-                      run(() => apiPost(`/api/jobs/${job.id}/quote/reject`, { decision: 'REJECTED' }))
-                    }
-                  >
-                    Reject
-                  </Button>
-                </div>
+                {readOnlyViewer ? (
+                  <p className="text-xs text-slate-500">Waiting for the customer to approve this quote.</p>
+                ) : (
+                  <div className="flex gap-2">
+                    <Button
+                      variant="success"
+                      loading={busy}
+                      onClick={() =>
+                        run(() => apiPost(`/api/jobs/${job.id}/quote/approve`, { decision: 'APPROVED' }))
+                      }
+                    >
+                      Approve quote
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      loading={busy}
+                      onClick={() =>
+                        run(() => apiPost(`/api/jobs/${job.id}/quote/reject`, { decision: 'REJECTED' }))
+                      }
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ) : null}
@@ -307,34 +552,202 @@ export function RequestSession({ requestId }: { requestId: string }) {
             <Card className="border-emerald-200">
               <CardHeader>
                 <CardTitle>Payment due</CardTitle>
-                <span className="text-lg font-semibold">{formatINR(request.totalAmountCents)}</span>
+                <span className="text-lg font-semibold">
+                  {formatINR(Math.max(0, (request.totalAmountCents ?? 0) - (appliedCoupon?.discountCents ?? 0)))}
+                  {appliedCoupon ? (
+                    <span className="ml-2 text-sm font-normal text-emerald-700">
+                      {appliedCoupon.code} − {formatINR(appliedCoupon.discountCents)}
+                    </span>
+                  ) : null}
+                </span>
               </CardHeader>
-              <CardContent className="flex flex-wrap gap-2">
-                <Button
-                  variant="success"
-                  loading={busy}
-                  onClick={() => run(() => apiPost(`/api/emergencies/${request.id}/payment`, { method: 'UPI' }))}
-                >
-                  Pay with UPI
-                </Button>
-                <Button
-                  variant="secondary"
-                  loading={busy}
-                  onClick={() => run(() => apiPost(`/api/emergencies/${request.id}/payment`, { method: 'CARD' }))}
-                >
-                  Pay with card
-                </Button>
-                <Button
-                  variant="ghost"
-                  onClick={() => {
-                    void apiPost(`/api/emergencies/${request.id}/payment`, { method: 'CASH' }).then(() => load());
-                  }}
-                >
-                  Pay cash to mechanic
-                </Button>
+              <CardContent className="space-y-3">
+                {appliedCoupon || request.couponCode ? null : (
+                  <div className="flex flex-wrap items-end gap-2">
+                    <Field label="Coupon code" className="flex-1 min-w-44">
+                      <Input
+                        value={couponInput}
+                        onChange={(event) => setCouponInput(event.target.value.toUpperCase())}
+                        placeholder="SAVE10"
+                      />
+                    </Field>
+                    <Button variant="secondary" loading={couponBusy} onClick={() => void previewCoupon()}>
+                      Apply
+                    </Button>
+                  </div>
+                )}
+                {couponError ? <Alert tone="danger">{couponError}</Alert> : null}
+                {request.couponCode && !appliedCoupon ? (
+                  <p className="text-xs text-emerald-700">
+                    {request.couponCode} applied · {formatINR(request.couponDiscountCents)} off
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="success"
+                    loading={busy}
+                    onClick={() => void startOnlinePayment('UPI')}
+                  >
+                    Pay with UPI
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    loading={busy}
+                    onClick={() => void startOnlinePayment('CARD')}
+                  >
+                    Pay with card
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      void apiPost(`/api/emergencies/${request.id}/payment`, {
+                        method: 'CASH',
+                        ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
+                      }).then(() => load());
+                    }}
+                  >
+                    Pay cash to mechanic
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ) : null}
+
+          {invoice ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Invoice</CardTitle>
+                <span className="text-sm font-medium text-slate-500">{invoice.number}</span>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="divide-y divide-slate-100 rounded-lg border border-slate-100 text-sm">
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-slate-500">Subtotal</span>
+                    <span className="tabular-nums">{formatINR(invoice.subtotalCents)}</span>
+                  </div>
+                  <div className="flex justify-between px-3 py-2">
+                    <span className="text-slate-500">GST (18%)</span>
+                    <span className="tabular-nums">{formatINR(invoice.taxCents)}</span>
+                  </div>
+                  {invoice.discountCents > 0 ? (
+                    <div className="flex justify-between px-3 py-2 text-emerald-700">
+                      <span>
+                        Discount{request.couponCode ? ` (${request.couponCode})` : ''}
+                      </span>
+                      <span className="tabular-nums">−{formatINR(invoice.discountCents)}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between px-3 py-2 font-medium">
+                    <span>Total</span>
+                    <span className="tabular-nums">{formatINR(invoice.totalCents)}</span>
+                  </div>
+                </div>
+                {invoicePayments.length > 0 ? (
+                  <div className="space-y-1">
+                    {invoicePayments.map((payment) => (
+                      <div key={payment.id} className="flex items-center justify-between text-xs text-slate-500">
+                        <span>
+                          {payment.method} · {titleCase(payment.provider)} · {payment.status}
+                        </span>
+                        <span>{payment.paidAt ? formatDateTime(payment.paidAt) : formatDateTime(payment.createdAt ?? '')}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+                <div className="flex flex-wrap items-center gap-3">
+                  <Badge tone={invoice.status === 'PAID' ? 'emerald' : 'slate'}>{invoice.status}</Badge>
+                  {invoice.pdfUrl ? (
+                    <a
+                      href={invoice.pdfUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm font-medium text-brand-700 hover:underline"
+                    >
+                      Download PDF
+                    </a>
+                  ) : (
+                    <span className="text-xs text-slate-400">PDF is being prepared…</span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
+
+          {reviews.length > 0 ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>Reviews</CardTitle>
+                <span className="text-xs text-slate-500">{reviews.length} submitted</span>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {reviews.map((review) => (
+                  <div key={review.id} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <Rating value={review.overall} size="sm" />
+                      <span className="text-xs text-slate-400">{formatDateTime(review.createdAt)}</span>
+                    </div>
+                    {review.comment ? <p className="text-sm text-slate-700">{review.comment}</p> : null}
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Session chat</CardTitle>
+              <span className="text-xs text-slate-500">
+                {request.assignedMechanic ? 'Driver and mechanic' : 'Messages with support'}
+                {realtime.connected ? ' · live' : ''}
+              </span>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-3">
+                {messages.length === 0 ? (
+                  <p className="text-sm text-slate-500">No messages yet.</p>
+                ) : (
+                  messages.map((message) => {
+                    const mine = message.senderUserId === user?.id;
+                    return (
+                      <div key={message.id} className={mine ? 'flex justify-end' : 'flex justify-start'}>
+                        <div
+                          className={
+                            'max-w-[80%] rounded-2xl px-3 py-2 text-sm shadow-sm ' +
+                            (mine ? 'bg-brand-600 text-white' : 'border border-slate-200 bg-white text-slate-700')
+                          }
+                        >
+                          {!mine ? (
+                            <p className="mb-0.5 text-xs font-medium text-slate-500">{message.senderName}</p>
+                          ) : null}
+                          <p className="whitespace-pre-wrap break-words">{message.body}</p>
+                          <p className={'mt-1 text-[10px] ' + (mine ? 'text-brand-100' : 'text-slate-400')}>
+                            {formatDateTime(message.createdAt)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {canChat ? (
+                <form onSubmit={sendChat} className="flex gap-2">
+                  <Input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    placeholder="Type a message…"
+                    maxLength={1000}
+                    aria-label="Chat message"
+                  />
+                  <Button type="submit" disabled={chatBusy || !chatInput.trim()}>
+                    {chatBusy ? 'Sending…' : 'Send'}
+                  </Button>
+                </form>
+              ) : (
+                <p className="text-xs text-slate-500">Only the driver and assigned mechanic can post messages.</p>
+              )}
+              {chatError ? <p className="text-xs text-rose-600">{chatError}</p> : null}
+            </CardContent>
+          </Card>
 
           <Card>
             <CardHeader>
@@ -412,28 +825,59 @@ export function RequestSession({ requestId }: { requestId: string }) {
 
           <Card>
             <CardHeader>
-              <CardTitle>Actions</CardTitle>
+              <CardTitle>{readOnlyViewer ? 'Overview' : 'Actions'}</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col gap-2">
-              <Button variant="secondary" onClick={() => setShareOpen(true)}>
-                <Share2 className="h-4 w-4" /> Share with contacts
-              </Button>
-              <Button
-                variant="secondary"
-                loading={busy}
-                onClick={() => run(() => apiPost(`/api/emergencies/${request.id}/escalate`, {}))}
-              >
-                <ShieldAlert className="h-4 w-4" /> Escalate to operations
-              </Button>
-              {canReview ? (
-                <Button variant="primary" onClick={() => setReviewOpen(true)}>
-                  Rate this service
-                </Button>
+              {disputes.length > 0 ? (
+                <div className="space-y-2">
+                  {disputes.map((dispute) => (
+                    <div key={dispute.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Badge tone={dispute.status === 'OPEN' ? 'amber' : dispute.status === 'IN_REVIEW' ? 'blue' : dispute.status === 'RESOLVED' ? 'emerald' : 'slate'}>
+                          {dispute.status.replace('_', ' ')}
+                        </Badge>
+                        <span className="text-xs text-slate-500">{titleCase(dispute.category)}</span>
+                      </div>
+                      <p className="mt-1.5 text-xs text-slate-600">{dispute.reason}</p>
+                      {dispute.resolution ? (
+                        <p className="mt-1 text-xs text-emerald-700">Resolution: {dispute.resolution}</p>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               ) : null}
-              {['CANCELLED', 'PAID', 'FAILED'].includes(request.status) ? null : (
-                <Button variant="danger" onClick={() => setCancelOpen(true)}>
-                  <XCircle className="h-4 w-4" /> Cancel request
-                </Button>
+              {readOnlyViewer ? (
+                <p className="text-xs text-slate-500">
+                  Read-only view. Sharing, escalation and cancellation stay with the driver.
+                </p>
+              ) : (
+                <>
+                  <Button variant="secondary" onClick={() => setShareOpen(true)}>
+                    <Share2 className="h-4 w-4" /> Share with contacts
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    loading={busy}
+                    onClick={() => run(() => apiPost(`/api/emergencies/${request.id}/escalate`, {}))}
+                  >
+                    <ShieldAlert className="h-4 w-4" /> Escalate to operations
+                  </Button>
+                  {canReview ? (
+                    <Button variant="primary" onClick={() => setReviewOpen(true)}>
+                      Rate this service
+                    </Button>
+                  ) : null}
+                  {disputes.some((d) => d.status === 'OPEN' || d.status === 'IN_REVIEW') ? null : (
+                    <Button variant="secondary" onClick={() => setDisputeOpen(true)}>
+                      Raise a dispute
+                    </Button>
+                  )}
+                  {['CANCELLED', 'PAID', 'FAILED'].includes(request.status) ? null : (
+                    <Button variant="danger" onClick={() => setCancelOpen(true)}>
+                      <XCircle className="h-4 w-4" /> Cancel request
+                    </Button>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
@@ -465,6 +909,11 @@ export function RequestSession({ requestId }: { requestId: string }) {
         <Field label="Reason" hint="A mechanic may already be on the way.">
           <Textarea value={cancelReason} onChange={(event) => setCancelReason(event.target.value)} />
         </Field>
+        <p className="mt-3 text-xs text-slate-500">
+          The first {DEFAULT_CONFIG.cancellation.freeWindowSeconds} seconds are free. After that, cancelling while a
+          mechanic is already dispatched adds a {formatMoney(DEFAULT_CONFIG.cancellation.feeCents)} cancellation fee to
+          this request.
+        </p>
       </Modal>
 
       <Modal
@@ -521,6 +970,65 @@ export function RequestSession({ requestId }: { requestId: string }) {
           void load();
         }}
       />
+
+      <Modal
+        open={disputeOpen}
+        onClose={() => setDisputeOpen(false)}
+        title="Raise a dispute"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setDisputeOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              loading={busy}
+              onClick={async () => {
+                if (disputeReason.trim().length < 10) {
+                  setActionError('Please describe the issue in at least 10 characters.');
+                  return;
+                }
+                setBusy(true);
+                setActionError(null);
+                try {
+                  await apiPost(`/api/disputes`, {
+                    requestId: request.id,
+                    category: disputeCategory,
+                    reason: disputeReason.trim(),
+                  });
+                  setDisputeReason('');
+                  setDisputeOpen(false);
+                  await load();
+                } catch (err) {
+                  setActionError(errorMessage(err));
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              Submit dispute
+            </Button>
+          </>
+        }
+      >
+        <Field label="What went wrong?">
+          <Select value={disputeCategory} onChange={(event) => setDisputeCategory(event.target.value)}>
+            <option value="SERVICE_QUALITY">Service quality</option>
+            <option value="OVERCHARGING">Overcharging</option>
+            <option value="NO_SHOW">Mechanic did not show up</option>
+            <option value="VEHICLE_DAMAGE">Vehicle damage</option>
+            <option value="SAFETY">Safety concern</option>
+            <option value="OTHER">Other</option>
+          </Select>
+        </Field>
+        <Field label="Details" hint="At least 10 characters. Our team reviews every dispute.">
+          <Textarea
+            value={disputeReason}
+            onChange={(event) => setDisputeReason(event.target.value)}
+            placeholder="Describe what happened…"
+          />
+        </Field>
+        {actionError ? <Alert tone="danger" className="mt-3">{actionError}</Alert> : null}
+      </Modal>
     </div>
   );
 }

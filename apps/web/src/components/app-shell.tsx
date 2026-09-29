@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, useCallback, type ReactNode } from 'react';
 import { BRAND } from '@rr/config';
 import { Bell, HelpCircle, LogOut, Menu, Siren, X } from 'lucide-react';
 import { useAuth, useRequireRole, type Profile } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import type { TranslationKey } from '@/lib/dictionaries/en';
 import { apiGet } from '@/lib/api';
+import { useRealtime } from '@/lib/realtime';
 import { Avatar, cn } from '@rr/ui';
 import { NAV_BY_ROLE } from './nav-items';
 import type { Role } from '@rr/types';
@@ -34,24 +35,27 @@ function LanguageToggle() {
   );
 }
 
-function UnreadBadge() {
+function UnreadBadge({ userId }: { userId: string }) {
   const [count, setCount] = useState(0);
-  useEffect(() => {
-    let alive = true;
-    const load = () => {
-      void apiGet<{ unreadCount?: number; count?: number }>('/api/notifications/unread-count')
-        .then((data) => {
-          if (alive) setCount(data.unreadCount ?? data.count ?? 0);
-        })
-        .catch(() => undefined);
-    };
-    load();
-    const timer = setInterval(load, 30_000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
+  const refresh = useCallback(() => {
+    void apiGet<{ unreadCount?: number; count?: number }>('/api/notifications/unread-count')
+      .then((data) => setCount(data.unreadCount ?? data.count ?? 0))
+      .catch(() => undefined);
   }, []);
+  useEffect(() => {
+    refresh();
+    // Realtime covers the common path; this is a slow self-heal fallback
+    // (reconnects, missed frames, count drift after mark-as-read elsewhere).
+    const timer = setInterval(refresh, 600_000);
+    return () => clearInterval(timer);
+  }, [refresh]);
+  useRealtime(
+    userId ? `user:${userId}` : null,
+    (message) => {
+      if (message.type === 'notification') refresh();
+    },
+    { enabled: Boolean(userId) },
+  );
   if (count <= 0) return null;
   return (
     <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold text-white">
@@ -63,12 +67,15 @@ function UnreadBadge() {
 export function AppShell({
   children,
   roles = null,
+  allowAnonymous = false,
 }: {
   children: ReactNode;
   roles?: Role[] | null;
+  /** Public pages (help, privacy, terms, track) render for logged-out visitors. */
+  allowAnonymous?: boolean;
 }) {
   const { user, profile, loading, logout, homePath } = useAuth();
-  const { allowed } = useRequireRole(roles);
+  const { allowed } = useRequireRole(roles, allowAnonymous);
   const { t } = useI18n();
   const pathname = usePathname();
   const router = useRouter();
@@ -78,6 +85,13 @@ export function AppShell({
     setMobileOpen(false);
   }, [pathname]);
 
+  // Register the service worker (offline shell + Web Push delivery).
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      void navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    }
+  }, []);
+
   if (loading || !allowed) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-canvas">
@@ -86,7 +100,47 @@ export function AppShell({
     );
   }
 
-  if (!user) return null;
+  if (!user) {
+    if (!allowAnonymous) return null;
+    return (
+      <div className="min-h-screen bg-canvas">
+        <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 backdrop-blur">
+          <div className="mx-auto flex h-14 max-w-5xl items-center gap-3 px-4 sm:px-6">
+            <Link href="/" className="flex items-center gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sun-400 text-sm font-bold text-ink">
+                {BRAND.name.slice(0, 1)}
+              </span>
+              <span className="text-sm font-semibold tracking-tight text-ink">{BRAND.name}</span>
+            </Link>
+            <div className="ml-auto flex items-center gap-2">
+              <Link
+                href="/help"
+                className="hidden rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 sm:block"
+              >
+                {t('nav.help')}
+              </Link>
+              <LanguageToggle />
+              <Link
+                href="/login"
+                className="inline-flex h-9 items-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
+              >
+                {t('nav.login')}
+              </Link>
+            </div>
+          </div>
+        </header>
+        <main className="mx-auto max-w-4xl px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        <footer className="border-t border-slate-200 bg-white">
+          <div className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-4 text-xs text-slate-400 sm:px-6">
+            <Link href="/help" className="hover:text-slate-600">{t('nav.help')}</Link>
+            <Link href="/privacy" className="hover:text-slate-600">Privacy</Link>
+            <Link href="/terms" className="hover:text-slate-600">Terms</Link>
+            <span className="ml-auto">© {new Date().getFullYear()} {BRAND.name}</span>
+          </div>
+        </footer>
+      </div>
+    );
+  }
 
   const items = NAV_BY_ROLE[user.role];
 
@@ -191,7 +245,7 @@ export function AppShell({
                 aria-label={t('nav.notifications')}
               >
                 <Bell className="h-5 w-5" />
-                <UnreadBadge />
+                <UnreadBadge userId={user.id} />
               </Link>
               <Link href="/profile" className="hidden sm:block">
                 <Avatar name={user.fullName} />

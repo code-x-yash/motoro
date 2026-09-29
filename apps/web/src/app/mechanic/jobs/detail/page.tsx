@@ -1,7 +1,7 @@
 'use client';
 
-import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { DiagnosisDto, EmergencyRequestDto, JobDto, QuoteDto, TimelineEventDto } from '@rr/types';
 import {
   Alert,
@@ -52,14 +52,16 @@ interface QuoteItemDraft {
 export default function JobWorkbenchPage() {
   return (
     <AppShell roles={['MECHANIC', 'WORKSHOP', 'TOWING_PARTNER']}>
-      <Workbench />
+      <Suspense fallback={<LoadingState label="Opening workbench…" />}>
+        <Workbench />
+      </Suspense>
     </AppShell>
   );
 }
 
 function Workbench() {
-  const params = useParams<{ id: string }>();
-  const jobId = params?.id ?? '';
+  const searchParams = useSearchParams();
+  const jobId = searchParams.get('id') ?? '';
 
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [timeline, setTimeline] = useState<TimelineEventDto[]>([]);
@@ -623,12 +625,30 @@ function Workbench() {
                 </label>
               </div>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {job.photos.map((photo) => (
-                  <div key={photo.id} className="rounded-lg border border-slate-100 p-2 text-center">
-                    <Camera className="mx-auto h-5 w-5 text-slate-300" />
-                    <p className="mt-1 text-[10px] font-medium text-slate-500">{photo.stage}</p>
-                  </div>
-                ))}
+                {job.photos.map((photo) =>
+                  photo.url ? (
+                    <a
+                      key={photo.id}
+                      href={photo.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="group overflow-hidden rounded-lg border border-slate-100"
+                      title={photo.caption ?? photo.stage}
+                    >
+                      <img
+                        src={photo.url}
+                        alt={photo.caption ?? `${photo.stage} photo`}
+                        className="aspect-square w-full object-cover transition group-hover:opacity-85"
+                      />
+                      <p className="p-1 text-center text-[10px] font-medium text-slate-500">{photo.stage}</p>
+                    </a>
+                  ) : (
+                    <div key={photo.id} className="rounded-lg border border-slate-100 p-2 text-center">
+                      <Camera className="mx-auto h-5 w-5 text-slate-300" />
+                      <p className="mt-1 text-[10px] font-medium text-slate-500">{photo.stage}</p>
+                    </div>
+                  ),
+                )}
               </div>
             </CardContent>
           </Card>

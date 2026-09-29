@@ -89,7 +89,7 @@ function MechanicJobs() {
           {filtered.map((job) => {
             const request = requestById.get(job.requestId);
             return (
-              <Link key={job.id} href={`/mechanic/jobs/${job.id}`}>
+              <Link key={job.id} href={`/mechanic/jobs/detail?id=${job.id}`}>
                 <Card className="mb-3 transition-colors hover:border-brand-300">
                   <CardContent className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">

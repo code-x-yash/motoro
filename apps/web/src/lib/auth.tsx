@@ -128,13 +128,20 @@ export function useAuth(): AuthContextValue {
 }
 
 /** Client-side guard: renders `fallback` while loading and redirects when the role does not match. */
-export function useRequireRole(roles: Role[] | null): { allowed: boolean; ready: boolean } {
+export function useRequireRole(
+  roles: Role[] | null,
+  allowAnonymous = false,
+): { allowed: boolean; ready: boolean } {
   const { user, loading } = useAuth();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (loading) return;
     if (!user) {
+      if (allowAnonymous) {
+        setReady(true);
+        return;
+      }
       window.location.replace('/login');
       return;
     }
@@ -143,7 +150,7 @@ export function useRequireRole(roles: Role[] | null): { allowed: boolean; ready:
       return;
     }
     setReady(true);
-  }, [loading, user, roles]);
+  }, [loading, user, roles, allowAnonymous]);
 
   return { allowed: ready, ready };
 }

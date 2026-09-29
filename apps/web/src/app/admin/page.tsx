@@ -25,6 +25,7 @@ interface MechanicRow {
   verificationStatus: string;
   experienceYears?: number;
   serviceRadiusKm?: number;
+  documentUrl?: string | null;
 }
 
 export default function AdminHomePage() {
@@ -107,6 +108,11 @@ function AdminHome() {
               Pricing & config
             </Button>
           </Link>
+          <Link href="/admin/disputes">
+            <Button variant="secondary" size="sm">
+              Disputes{stats?.openDisputes ? ` (${stats.openDisputes})` : ''}
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -118,6 +124,7 @@ function AdminHome() {
         <Stat label="Jobs completed" value={stats?.jobs.completed ?? 0} tone="emerald" />
         <Stat label="Revenue" value={`₹${Math.round((stats?.revenueCents ?? 0) / 100).toLocaleString('en-IN')}`} tone="emerald" />
         <Stat label="Pending verifications" value={stats?.pendingVerifications ?? 0} tone="amber" />
+        <Stat label="Open disputes" value={stats?.openDisputes ?? 0} tone="rose" />
         <Stat label="Escalated" value={stats?.requests.escalated ?? 0} tone="rose" />
         <Stat label="Cancelled" value={stats?.requests.cancelled ?? 0} />
         <Stat label="Workshops / towing" value={`${stats?.users.workshops ?? 0} / ${stats?.users.towing ?? 0}`} />
@@ -152,6 +159,16 @@ function AdminHome() {
                     </Td>
                     <Td>
                       <Badge tone="amber">{mechanic.verificationStatus}</Badge>
+                      {mechanic.documentUrl ? (
+                        <a
+                          href={mechanic.documentUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-0.5 block text-xs font-medium text-brand-700 hover:underline"
+                        >
+                          View document
+                        </a>
+                      ) : null}
                     </Td>
                     <Td className="text-right">
                       <div className="flex justify-end gap-2">

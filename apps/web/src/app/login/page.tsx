@@ -78,6 +78,14 @@ export default function LoginPage() {
                   placeholder="••••••••"
                 />
               </Field>
+              <div className="-mt-2 text-right">
+                <Link
+                  href="/forgot-password"
+                  className="text-xs font-medium text-brand-700 hover:underline"
+                >
+                  Forgot password?
+                </Link>
+              </div>
               <Button type="submit" loading={busy} fullWidth>
                 Log in
               </Button>

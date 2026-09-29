@@ -276,7 +276,7 @@ function DriverDashboard() {
 
                 <div className="flex flex-wrap gap-2">
                   <Link
-                    href={`/requests/${active.id}`}
+                    href={`/requests/detail?id=${active.id}`}
                     className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-sun-400 px-4 text-sm font-semibold text-ink shadow-sm transition hover:-translate-y-0.5 hover:bg-sun-300"
                   >
                     Track <ArrowRight className="h-4 w-4" />
@@ -354,7 +354,7 @@ function DriverDashboard() {
                 recent.map((item) => (
                   <Link
                     key={item.id}
-                    href={`/requests/${item.id}`}
+                    href={`/requests/detail?id=${item.id}`}
                     className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 transition hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-card"
                   >
                     <div className="min-w-0">

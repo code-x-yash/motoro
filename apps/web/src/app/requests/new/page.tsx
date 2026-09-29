@@ -5,9 +5,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { VehicleDto, Paginated, EmergencyRequestDto } from '@rr/types';
 import { ISSUE_TYPES, type IssueType } from '@rr/config';
 import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Field, Input, Select, Textarea, cn } from '@rr/ui';
-import { Battery, CircleDot, Crosshair, Fuel, Gauge, HelpCircle, KeyRound, Lightbulb, Siren, Thermometer, Wrench } from 'lucide-react';
+import { Battery, CircleDot, Crosshair, Fuel, Gauge, HelpCircle, ImagePlus, KeyRound, Lightbulb, Siren, Thermometer, Wrench, X } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { ApiError, apiGet, apiPost, errorMessage, fieldErrors } from '@/lib/api';
+import { MAX_UPLOAD_BYTES, UPLOAD_TYPES, uploadToR2 } from '@/lib/uploads';
 
 /** Statuses that block creating a second request (mirrors the worker's active set). */
 const ACTIVE_STATUSES = new Set([
@@ -100,6 +101,53 @@ function NewRequestForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
+  const [photos, setPhotos] = useState<File[]>([]);
+  const [geoSuggestions, setGeoSuggestions] = useState<Array<{ label: string; latitude: number; longitude: number }>>([]);
+  const [geoBusy, setGeoBusy] = useState(false);
+
+  const reverseLookup = (latitude: number, longitude: number) => {
+    void apiGet<{ address: { label: string } }>('/api/geo/reverse', { query: { latitude, longitude } })
+      .then((data) => {
+        if (data.address?.label) setAddress(data.address.label);
+      })
+      .catch(() => undefined);
+  };
+
+  const searchAddress = async () => {
+    if (address.trim().length < 2) return;
+    setGeoBusy(true);
+    setError(null);
+    try {
+      const data = await apiGet<{ items: Array<{ label: string; latitude: number; longitude: number }> }>(
+        '/api/geo/search',
+        { query: { query: address.trim(), limit: 5 } },
+      );
+      setGeoSuggestions(data.items ?? []);
+      if ((data.items ?? []).length === 0) setError('No matching addresses found.');
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setGeoBusy(false);
+    }
+  };
+
+  const addPhotos = (list: FileList | null) => {
+    if (!list) return;
+    const next = [...photos];
+    for (const file of Array.from(list)) {
+      if (next.length >= 5) break;
+      if (!(UPLOAD_TYPES as readonly string[]).includes(file.type)) {
+        setError('Photos must be JPG, PNG or WebP.');
+        continue;
+      }
+      if (file.size > MAX_UPLOAD_BYTES) {
+        setError('Each photo must be under 8 MB.');
+        continue;
+      }
+      next.push(file);
+    }
+    setPhotos(next);
+  };
 
   useEffect(() => {
     void apiGet<Paginated<VehicleDto>>('/api/vehicles', { query: { limit: 20 } })
@@ -127,6 +175,7 @@ function NewRequestForm() {
         });
         setLocationLabel(`${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)} · GPS`);
         setLocating(false);
+        reverseLookup(position.coords.latitude, position.coords.longitude);
       },
       () => {
         setLocationLabel('Using default city coordinates (location denied)');
@@ -162,17 +211,24 @@ function NewRequestForm() {
         vehicleId: vehicleId || null,
       };
       if (isAccident) payload.accidentMode = accident;
+      if (photos.length > 0) {
+        const keys: string[] = [];
+        for (const photo of photos) {
+          keys.push(await uploadToR2(photo, 'breakdown'));
+        }
+        payload.photoKeys = keys;
+      }
       const created = await apiPost<{ id?: string; request?: { id: string } }>('/api/emergencies', payload);
       const createdId = created.request?.id ?? created.id;
       if (!createdId) {
         throw new Error('Your request was created but could not be opened — check your history.');
       }
-      router.replace(`/requests/${createdId}`);
+      router.replace(`/requests/detail?id=${createdId}`);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'ACTIVE_REQUEST_EXISTS') {
         const existingId = await latestRequestId();
         if (existingId) {
-          router.replace(`/requests/${existingId}`);
+          router.replace(`/requests/detail?id=${existingId}`);
           return;
         }
       }
@@ -277,6 +333,44 @@ function NewRequestForm() {
               />
             </Field>
 
+            <Field label="Photos (optional)" htmlFor="photos" hint="Up to 5 images — they help the mechanic arrive prepared.">
+              <div className="flex flex-wrap items-center gap-2">
+                <label
+                  htmlFor="photos"
+                  className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-lg border border-dashed border-slate-300 px-3 text-sm font-medium text-slate-600 hover:border-brand-500 hover:text-brand-700"
+                >
+                  <ImagePlus className="h-4 w-4" /> Add photos
+                  <input
+                    id="photos"
+                    type="file"
+                    accept={UPLOAD_TYPES.join(',')}
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      addPhotos(event.target.files);
+                      event.target.value = '';
+                    }}
+                  />
+                </label>
+                {photos.map((photo, index) => (
+                  <span
+                    key={`${photo.name}-${index}`}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                  >
+                    {photo.name.slice(0, 24)}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${photo.name}`}
+                      onClick={() => setPhotos((prev) => prev.filter((_, i) => i !== index))}
+                      className="text-slate-400 hover:text-rose-600"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </Field>
+
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -308,8 +402,46 @@ function NewRequestForm() {
                     onChange={(event) => setLocation((prev) => ({ ...prev, longitude: Number(event.target.value) }))}
                   />
                 </Field>
-                <Field label="Address (optional)">
-                  <Input value={address} onChange={(event) => setAddress(event.target.value)} placeholder="Landmark or street" />
+                <Field label="Address (optional)" hint="Type an address or use my location to auto-fill.">
+                  <div className="flex gap-2">
+                    <Input
+                      value={address}
+                      onChange={(event) => {
+                        setAddress(event.target.value);
+                        setGeoSuggestions([]);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault();
+                          void searchAddress();
+                        }
+                      }}
+                      placeholder="Landmark or street"
+                    />
+                    <Button type="button" variant="secondary" loading={geoBusy} onClick={() => void searchAddress()}>
+                      Search
+                    </Button>
+                  </div>
+                  {geoSuggestions.length > 0 ? (
+                    <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200 bg-white">
+                      {geoSuggestions.map((suggestion) => (
+                        <li key={`${suggestion.latitude},${suggestion.longitude}`}>
+                          <button
+                            type="button"
+                            className="block w-full px-3 py-2 text-left text-xs text-slate-700 hover:bg-sun-50"
+                            onClick={() => {
+                              setLocation({ latitude: suggestion.latitude, longitude: suggestion.longitude, accuracy: 0 });
+                              setAddress(suggestion.label);
+                              setLocationLabel(`${suggestion.latitude.toFixed(4)}, ${suggestion.longitude.toFixed(4)} · address search`);
+                              setGeoSuggestions([]);
+                            }}
+                          >
+                            {suggestion.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
                 </Field>
               </div>
             </div>
