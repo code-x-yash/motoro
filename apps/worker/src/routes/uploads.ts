@@ -7,6 +7,7 @@ import { parseInput } from '../lib/validate';
 import { presignUploadSchema } from '@rr/validation';
 import { buildObjectKey, presignDownload, presignUpload, recordFile, verifyRelaySignature } from '../lib/r2';
 import { DEFAULT_CONFIG } from '@rr/config';
+import { enforceRateLimit } from '../lib/rate-limit';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -20,6 +21,7 @@ const routes = new Hono<{ Bindings: Env }>();
 
 routes.post('/presign', async (c) => {
   const user = await requireUser(c);
+  await enforceRateLimit(c.env, 'upload', user.id, 30, 60, 'Too many uploads. Please wait a moment.');
   const input = parseInput(presignUploadSchema, await c.req.json().catch(() => ({})));
 
   if (input.sizeBytes > DEFAULT_CONFIG.uploads.maxFileBytes) {

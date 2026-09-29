@@ -97,13 +97,17 @@ export interface JobRow {
 }
 
 export async function mapJobRow(env: Env, row: JobRow): Promise<JobDto> {
-  const [photoRows, historyRows] = await Promise.all([
+  const [photoRows, historyRows, requestPhotoRows] = await Promise.all([
     env.DB.prepare('SELECT * FROM job_photos WHERE job_id = ? ORDER BY created_at ASC').bind(row.id).all(),
     env.DB.prepare('SELECT * FROM job_status_history WHERE job_id = ? ORDER BY created_at ASC').bind(row.id).all(),
+    // Photos the driver attached at request creation (before a job existed).
+    env.DB.prepare('SELECT * FROM job_photos WHERE request_id = ? AND job_id IS NULL ORDER BY created_at ASC')
+      .bind(row.request_id)
+      .all(),
   ]);
 
   const photos: JobPhotoDto[] = [];
-  for (const p of photoRows.results) {
+  for (const p of [...photoRows.results, ...requestPhotoRows.results]) {
     const photo = p as unknown as {
       id: string;
       stage: JobPhotoDto['stage'];
@@ -119,6 +123,7 @@ export async function mapJobRow(env: Env, row: JobRow): Promise<JobDto> {
       createdAt: photo.created_at,
     });
   }
+  photos.sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
   const statusHistory: JobStatusHistoryDto[] = historyRows.results.map((h) => {
     const record = h as unknown as {
@@ -494,6 +499,7 @@ export async function mapInvoice(
     request_id: string;
     subtotal_cents: number;
     tax_cents: number;
+    discount_cents?: number;
     total_cents: number;
     status: string;
     pdf_key: string | null;
@@ -507,6 +513,7 @@ export async function mapInvoice(
     requestId: row.request_id,
     subtotalCents: row.subtotal_cents,
     taxCents: row.tax_cents,
+    discountCents: row.discount_cents ?? 0,
     totalCents: row.total_cents,
     status: row.status as InvoiceDto['status'],
     pdfUrl: row.pdf_key ? (await presignDownload(env, origin, row.pdf_key, 3600)).url : null,

@@ -34,6 +34,28 @@ export const IMPORTANT_EVENTS = [
 
 export type ImportantEvent = (typeof IMPORTANT_EVENTS)[number];
 
+export const PREF_CHANNELS = ['EMAIL', 'SMS', 'WHATSAPP', 'PUSH'] as const;
+
+/**
+ * Per-user channel preferences (opt-out model: a missing key means enabled).
+ * IN_APP is the in-product inbox and is never suppressed.
+ */
+export async function getUserNotificationPrefs(env: Env, userId: string): Promise<Record<string, boolean>> {
+  try {
+    const row = await env.DB.prepare('SELECT notification_prefs_json FROM users WHERE id = ?')
+      .bind(userId)
+      .first<{ notification_prefs_json: string | null }>();
+    if (!row?.notification_prefs_json) return {};
+    const parsed: unknown = JSON.parse(row.notification_prefs_json);
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, boolean>;
+    }
+    return {};
+  } catch {
+    return {};
+  }
+}
+
 /**
  * Notification abstraction. IN_APP is always persisted and pushed over the
  * realtime user room; EMAIL / SMS / WHATSAPP are queued and delivered only
@@ -75,7 +97,19 @@ export async function notify(env: Env, input: NotificationInput): Promise<string
     },
   });
 
-  const channels = (input.channels ?? []).filter((c) => c !== 'IN_APP');
+  const prefs = await getUserNotificationPrefs(env, input.userId);
+  const channels = (input.channels ?? []).filter(
+    (channel) => channel !== 'IN_APP' && prefs[channel] !== false,
+  );
+  // Important events additionally fan out over Web Push (browser subscription
+  // is its own opt-in; the PUSH preference can still suppress it).
+  if (
+    prefs.PUSH !== false &&
+    (IMPORTANT_EVENTS as readonly string[]).includes(input.type) &&
+    !channels.includes('PUSH')
+  ) {
+    channels.push('PUSH');
+  }
   if (channels.length > 0) {
     try {
       await env.TASKS.send({

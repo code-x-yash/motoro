@@ -9,12 +9,14 @@ import { requireRequest, assertRequestAccess } from '../lib/requests';
 import { newId, nowIso } from '../lib/ids';
 import { audit } from '../lib/audit';
 import { notify } from '../lib/notify';
+import { enforceRateLimit } from '../lib/rate-limit';
 
 const routes = new Hono<{ Bindings: Env }>();
 
 /** Reviews are only allowed between parties of a completed job. */
 routes.post('/', async (c) => {
   const user = await requireUser(c);
+  await enforceRateLimit(c.env, 'review', user.id, 10, 300, 'You are submitting reviews too quickly. Please wait.');
   const input = parseInput(createReviewSchema, await c.req.json().catch(() => ({})));
   const request = await requireRequest(c.env, input.requestId);
   assertRequestAccess(user, request);
@@ -98,6 +100,14 @@ routes.post('/', async (c) => {
     .bind(agg?.s ?? 0, agg?.c ?? 0, nowIso(), revieweeUserId)
     .run()
     .catch(() => undefined);
+
+  // The driver's rating lives on the request too — it drives the "Rate this service" button.
+  if (isDriver) {
+    await c.env.DB.prepare('UPDATE emergency_requests SET rating = ? WHERE id = ?')
+      .bind(input.overall, request.id)
+      .run()
+      .catch(() => undefined);
+  }
 
   await notify(c.env, {
     userId: revieweeUserId,

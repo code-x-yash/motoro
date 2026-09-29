@@ -9,6 +9,7 @@ import { newId, nowIso, isoIn } from '../lib/ids';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { audit } from '../lib/audit';
 import { logger } from '../lib/logger';
+import { getUserNotificationPrefs } from '../lib/notify';
 import {
   forgotPasswordSchema,
   loginSchema,
@@ -258,6 +259,7 @@ routes.post('/forgot-password', async (c) => {
     .bind(input.email)
     .first<{ id: string }>();
 
+  let devToken: string | undefined;
   if (user) {
     const token = randomToken(24);
     const tokenHash = await sha256HexAsync(token);
@@ -266,17 +268,25 @@ routes.post('/forgot-password', async (c) => {
        VALUES (?, ?, ?, ?, ?)`,
     ).bind(newId(), user.id, tokenHash, isoIn(3600), nowIso()).run();
 
-    // Email delivery is queued; in development the token is returned so the
-    // flow can be completed without SMTP credentials.
-    await c.env.TASKS.send({
-      kind: 'notification.dispatch',
-      channels: ['EMAIL'],
-      type: 'PASSWORD_RESET',
-      title: 'Reset your password',
-      body: 'Use the link in this email to reset your password.',
-      userId: user.id,
-      data: { token },
-    }).catch(() => undefined);
+    const origin = new URL(c.req.url).origin;
+    const resetUrl = `${origin}/reset-password?token=${encodeURIComponent(token)}`;
+    // Respect the user's EMAIL opt-out: a disabled channel is never queued
+    // (the in-app notification and devToken still expose the reset flow).
+    const emailPrefs = await getUserNotificationPrefs(c.env, user.id);
+    if (emailPrefs.EMAIL !== false) {
+      await c.env.TASKS.send({
+        kind: 'notification.dispatch',
+        channels: ['EMAIL'],
+        type: 'PASSWORD_RESET',
+        title: 'Reset your password',
+        body: 'Use the link in this email to choose a new password. The link expires in 1 hour.',
+        userId: user.id,
+        data: { token, resetUrl },
+      }).catch(() => undefined);
+    }
+
+    // Non-production returns the token so the flow is testable without SMTP.
+    if (c.env.ENVIRONMENT !== 'production') devToken = token;
 
     logger.info(requestId, 'password_reset_requested', { userId: user.id });
   }
@@ -284,7 +294,7 @@ routes.post('/forgot-password', async (c) => {
   return ok(
     {
       message: 'If that email exists, a reset link has been sent.',
-      devToken: c.env.ENVIRONMENT !== 'production' ? undefined : undefined,
+      devToken,
     },
     requestId,
   );

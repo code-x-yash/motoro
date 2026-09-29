@@ -4,12 +4,14 @@ import { ok } from '../lib/response';
 import { errors } from '../lib/errors';
 import { requireUser, requirePermission } from '../lib/auth';
 import { parseInput } from '../lib/validate';
-import { emergencyContactSchema, updateProfileSchema } from '@rr/validation';
+import { emergencyContactSchema, updateProfileSchema, updatePreferencesSchema } from '@rr/validation';
 import { newId, nowIso } from '../lib/ids';
 import { audit } from '../lib/audit';
 import { loadSessionUser } from '../lib/user-dto';
 import { mapEmergencyContact } from '../lib/mappers';
-import { revokeAllSessions } from '../lib/session';
+import { revokeAllSessions, sessionTokenFromRequest } from '../lib/session';
+import { sha256HexAsync } from '../lib/crypto';
+import { getUserNotificationPrefs } from '../lib/notify';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -51,7 +53,10 @@ routes.patch('/', requirePermission('PROFILE_MANAGE'), async (c) => {
   binds.push(nowIso(), user.id);
   await c.env.DB.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).bind(...binds).run();
   if (input.phone !== undefined) {
-    await revokeAllSessions(c.env, user.id).catch(() => undefined);
+    // Revoke every OTHER session (this device stays signed in).
+    const token = sessionTokenFromRequest(c.req.raw, c.env);
+    const keepHash = token ? await sha256HexAsync(token) : undefined;
+    await revokeAllSessions(c.env, user.id, keepHash).catch(() => undefined);
   }
   await audit(c.env, {
     actorUserId: user.id,
@@ -63,6 +68,39 @@ routes.patch('/', requirePermission('PROFILE_MANAGE'), async (c) => {
   });
   const dto = await loadSessionUser(c.env, user.id);
   return ok({ user: dto.user, profile: dto.profile }, c.get('requestId'));
+});
+
+// --- notification preferences -------------------------------------------------
+
+routes.get('/preferences', async (c) => {
+  const user = await requireUser(c);
+  const notifications = await getUserNotificationPrefs(c.env, user.id);
+  return ok({ notifications }, c.get('requestId'));
+});
+
+routes.patch('/preferences', requirePermission('PROFILE_MANAGE'), async (c) => {
+  const user = await requireUser(c);
+  const input = parseInput(updatePreferencesSchema, await c.req.json().catch(() => ({})));
+  const current = await getUserNotificationPrefs(c.env, user.id);
+  const merged: Record<string, boolean> = { ...current };
+  for (const [channel, enabled] of Object.entries(input.notifications)) {
+    if (enabled === undefined) continue;
+    if (enabled) delete merged[channel];
+    else merged[channel] = false;
+  }
+  await c.env.DB.prepare('UPDATE users SET notification_prefs_json = ?, updated_at = ? WHERE id = ?')
+    .bind(JSON.stringify(merged), nowIso(), user.id)
+    .run();
+  await audit(c.env, {
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'NOTIFICATION_PREFERENCES_UPDATED',
+    entityType: 'user',
+    entityId: user.id,
+    data: { notifications: merged },
+    requestId: c.get('requestId'),
+  });
+  return ok({ notifications: merged }, c.get('requestId'));
 });
 
 // --- emergency contacts ------------------------------------------------------

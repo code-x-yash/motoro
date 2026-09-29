@@ -17,11 +17,28 @@ export interface Env {
   PAYMENT_PROVIDER?: string;
   PAYMENT_PROVIDER_KEY?: string;
   PAYMENT_PROVIDER_SECRET?: string;
+  PAYMENT_WEBHOOK_SECRET?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
   R2_BUCKET_NAME?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
   MAPS_API_KEY?: string;
+  // Notification delivery (in-app always works; providers are optional)
+  EMAIL_PROVIDER?: string;
+  EMAIL_PROVIDER_KEY?: string;
+  EMAIL_FROM?: string;
+  SMS_PROVIDER_KEY?: string;
+  SMS_FROM?: string;
+  WHATSAPP_PROVIDER_KEY?: string;
+  WHATSAPP_PHONE_ID?: string;
+  // Geocoding (default nominatim/OSM; set GEOCODER_PROVIDER=none to disable)
+  GEOCODER_PROVIDER?: string;
+  GEOCODER_KEY?: string;
+  // Web Push (VAPID). When unset, ephemeral development keys are generated
+  // and cached in KV so the service worker still gets a stable key locally.
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
 }
 
 export type AppEnv = Env;

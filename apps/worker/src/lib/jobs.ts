@@ -7,6 +7,7 @@ import { recordEvent } from './events';
 import { getRequest, setRequestStatus, type RequestRow } from './requests';
 import { setMechanicStatus } from './mechanics';
 import { broadcastRequestState } from './requests';
+import { broadcast, mechanicRoom, requestRoom } from './realtime';
 
 export interface JobRowFull {
   id: string;
@@ -229,6 +230,18 @@ export async function transitionJob(
 
   const request = await getRequest(env, job.request_id);
   if (request) await broadcastRequestState(env, request);
+
+  const jobPayload = { jobId: job.id, status: to, from: job.status, requestId: job.request_id };
+  await broadcast(env, requestRoom(job.request_id), {
+    type: 'job.updated',
+    requestId: job.request_id,
+    payload: jobPayload,
+  });
+  await broadcast(env, mechanicRoom(job.mechanic_user_id), {
+    type: 'job.updated',
+    requestId: job.request_id,
+    payload: jobPayload,
+  });
 
   return (await getJob(env, job.id)) ?? job;
 }

@@ -39,6 +39,7 @@ import { distanceKm } from '../lib/geo';
 import { recordMechanicLocation } from '../lib/mechanics';
 import { reassignRequest } from '../dispatch/service';
 import { mapJobRow, mapQuoteRow, type QuoteRow } from '../lib/mappers';
+import { broadcast, requestRoom } from '../lib/realtime';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -435,6 +436,18 @@ routes.post('/:id/quote', requirePermission('QUOTE_CREATE'), async (c) => {
     requestId: request.id,
   });
 
+  await broadcast(c.env, requestRoom(request.id), {
+    type: 'quote.updated',
+    requestId: request.id,
+    payload: {
+      quoteId,
+      jobId: job.id,
+      action: 'created',
+      status: 'PENDING',
+      totalCents: totals.totalCents,
+    },
+  });
+
   return ok({ quote: quoteRow ? await mapQuoteRow(c.env, quoteRow) : null }, c.get('requestId'), 201);
 });
 
@@ -501,6 +514,18 @@ async function decideQuoteHandler(c: Context<{ Bindings: Env }>, decision: 'APPR
     entityId: quote.id,
     data: { requestId: request.id },
     requestId: c.get('requestId'),
+  });
+
+  await broadcast(c.env, requestRoom(request.id), {
+    type: 'quote.updated',
+    requestId: request.id,
+    payload: {
+      quoteId: quote.id,
+      jobId: job.id,
+      action: 'decided',
+      status: decision,
+      totalCents: quote.total_cents,
+    },
   });
 
   const quoteRow = await c.env.DB.prepare('SELECT * FROM quotes WHERE id = ?')

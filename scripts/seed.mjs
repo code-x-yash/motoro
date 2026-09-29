@@ -235,7 +235,7 @@ function applyMigrations(db) {
 }
 
 function resetDatabase(db) {
-  for (const table of ['disputes', ...DELETION_ORDER, 'users']) {
+  for (const table of ['push_subscriptions', 'messages', 'payout_requests', 'coupons', 'disputes', ...DELETION_ORDER, 'users']) {
     if (tableExists(db, table)) db.exec(`DELETE FROM ${table}`);
   }
 }
@@ -1128,7 +1128,9 @@ function seed(db) {
       fee,
       jobStatus: hasJob ? 'COMPLETED' : cancelledWithJob ? 'CANCELLED' : null,
       hasJob: withJob,
-      rating: hasJob ? [5, 5, 4, 5, 5, 4][i % 6] : null,
+      // i=4 (RR-SSSSSX) stays unrated and unreviewed: the demo's
+      // "Rate this service" slot, which reviews.mjs depends on.
+      rating: hasJob && i !== 4 ? [5, 5, 4, 5, 5, 4][i % 6] : null,
       issueLabel: issue.replace(/_/g, ' '),
     });
   }
@@ -1747,7 +1749,7 @@ function seed(db) {
         tax_cents: request.quoteTotals.tax,
         total_cents: request.totalCents,
         status: invoiceStatus,
-        pdf_key: `demo/invoices/${invoiceNumber}.pdf`,
+        pdf_key: null,
         issued_at: issuedAt,
         paid_at: invoiceStatus === 'PAID' ? issuedAt : null,
         created_at: issuedAt,
@@ -1882,7 +1884,12 @@ function seed(db) {
     }
 
     // --- reviews ----------------------------------------------------------
-    if (job && ['PAID', 'PAYMENT_PENDING', 'COMPLETED'].includes(request.status)) {
+    // RR-SSSSSX (i=4) is skipped so it stays unrated for the review CTA.
+    if (
+      job &&
+      ['PAID', 'PAYMENT_PENDING', 'COMPLETED'].includes(request.status) &&
+      request.reference !== 'RR-SSSSSX'
+    ) {
       reviewPlan.push({
         requestId: request.id,
         jobId: job.id,
@@ -1952,6 +1959,9 @@ function seed(db) {
     ratingAggregates.set(review.reviewee, aggregate);
 
     if (review.direction === 'DRIVER_TO_MECHANIC') {
+      // Keep the request-level rating in sync with the driver's review so the
+      // "Rate this service" button disappears once they have reviewed.
+      db.prepare('UPDATE emergency_requests SET rating = ? WHERE id = ?').run(review.overall, review.requestId);
       addNotification({
         userId: review.reviewee,
         type: 'REVIEW_RECEIVED',
@@ -1971,6 +1981,30 @@ function seed(db) {
       count: aggregate.count,
       sum: aggregate.sum,
       updated_at: ago(2 * DAY),
+    });
+  }
+
+  // --- coupons --------------------------------------------------------------
+
+  const seedCoupons = [
+    { code: 'SAVE10', description: '10% off any roadside assistance', percent: 10, min: 0, max: null, until: 45 * DAY },
+    { code: 'WELCOME15', description: '15% off first-week orders above ₹500', percent: 15, min: 50_000, max: null, until: 30 * DAY },
+    { code: 'MONSOON25', description: '25% off, limited redemptions', percent: 25, min: 0, max: 100, until: 60 * DAY },
+  ];
+  for (const coupon of seedCoupons) {
+    ins('coupons', {
+      id: newId(),
+      code: coupon.code,
+      description: coupon.description,
+      percent_off: coupon.percent,
+      min_amount_cents: coupon.min,
+      max_uses: coupon.max,
+      used_count: 0,
+      valid_from: ago(5 * DAY),
+      valid_until: ago(-coupon.until),
+      active: 1,
+      created_at: ago(6 * DAY),
+      updated_at: ago(6 * DAY),
     });
   }
 

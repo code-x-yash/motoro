@@ -2,6 +2,7 @@ import type {
   AccidentModeDto,
   EmergencyRequestDto,
   JobDto,
+  JobPhotoDto,
   MechanicPublicDto,
   QuoteDto,
   RequestStatus,
@@ -14,6 +15,7 @@ import { nowIso } from './ids';
 import { recordEvent } from './events';
 import { broadcast, requestRoom, OPS_ROOM } from './realtime';
 import { mapJobRow, mapQuoteRow, mapPublicMechanic } from './mappers';
+import { presignDownload } from './r2';
 
 export interface RequestRow {
   id: string;
@@ -44,6 +46,8 @@ export interface RequestRow {
   completed_at: string | null;
   payment_status: string | null;
   total_amount_cents: number | null;
+  coupon_code: string | null;
+  coupon_discount_cents: number;
   rating: number | null;
   cancel_reason: string | null;
   cancelled_by: string | null;
@@ -227,6 +231,7 @@ export function mapRequestRow(
     assignedMechanic?: MechanicPublicDto | null;
     job?: JobDto | null;
     quote?: QuoteDto | null;
+    photos?: JobPhotoDto[];
     timeline?: unknown[];
   } = {},
 ): EmergencyRequestDto {
@@ -245,6 +250,9 @@ export function mapRequestRow(
     urgency: row.urgency as EmergencyRequestDto['urgency'],
     status: row.status,
     channel: row.channel as EmergencyRequestDto['channel'],
+    couponCode: row.coupon_code ?? null,
+    couponDiscountCents: row.coupon_discount_cents ?? 0,
+    photos: extras.photos ?? [],
     accidentMode: parseJson<AccidentModeDto>(row.accident_json),
     latitude: row.latitude,
     longitude: row.longitude,
@@ -299,7 +307,24 @@ export async function loadRequestDto(
 
   const quote = quoteRow ? await mapQuoteRow(env, quoteRow) : null;
 
-  const dto = mapRequestRow(row, { assignedMechanic, job, quote });
+  // Photos the driver attached when creating the request (job_id IS NULL).
+  const photoRows = await env.DB.prepare(
+    'SELECT * FROM job_photos WHERE request_id = ? AND job_id IS NULL ORDER BY created_at ASC',
+  )
+    .bind(requestId)
+    .all<{ id: string; stage: string; object_key: string; caption: string | null; created_at: string }>();
+  const photos: JobPhotoDto[] = [];
+  for (const p of photoRows.results) {
+    photos.push({
+      id: p.id,
+      stage: p.stage as JobPhotoDto['stage'],
+      url: (await presignDownload(env, '', p.object_key, 3600)).url,
+      caption: p.caption,
+      createdAt: p.created_at,
+    });
+  }
+
+  const dto = mapRequestRow(row, { assignedMechanic, job, quote, photos });
 
   // Job-start OTP for the driver: only while pending (hash set, not verified,
   // not expired). The plaintext lives in the driver's MECHANIC_ARRIVED

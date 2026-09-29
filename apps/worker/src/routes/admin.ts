@@ -7,18 +7,24 @@ import { parseInput } from '../lib/validate';
 import {
   adminSuspendSchema,
   adminVerifyMechanicSchema,
+  createCouponSchema,
   paginationSchema,
   platformConfigSchema,
   pricingRuleSchema,
   serviceCategorySchema,
 } from '@rr/validation';
 import { audit } from '../lib/audit';
-import { invalidateConfigCache, listConfig, setConfigValue } from '../lib/config';
+import { invalidateConfigCache, listConfig, setConfigValue, getConfig } from '../lib/config';
 import { newId, nowIso } from '../lib/ids';
 import { revokeAllSessions } from '../lib/session';
 import { setMechanicStatus } from '../lib/mechanics';
 import { notify } from '../lib/notify';
+import { recordEvent } from '../lib/events';
+import { getPaymentProvider } from '../lib/payments';
+import { computeMechanicPayout } from '../lib/pricing';
 import { SKILL_CATALOG, EQUIPMENT_CATALOG } from '@rr/config';
+import { presignDownload } from '../lib/r2';
+import { enforceRateLimit } from '../lib/rate-limit';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -48,7 +54,7 @@ routes.get('/stats', async (c) => {
        FROM jobs WHERE deleted_at IS NULL`,
     ).first<Record<string, number>>(),
     c.env.DB.prepare(
-      `SELECT COALESCE(SUM(amount_cents), 0) AS total FROM payments WHERE status = 'PAID'`,
+      `SELECT COALESCE(SUM(amount_cents - refunded_cents), 0) AS total FROM payments WHERE status = 'PAID'`,
     ).first<{ total: number }>(),
   ]);
 
@@ -208,6 +214,7 @@ routes.get('/mechanics', async (c) => {
   binds.push(query.limit ?? 20, query.offset ?? 0);
   const rows = await c.env.DB.prepare(sql).bind(...binds).all();
 
+  const origin = new URL(c.req.url).origin;
   const items = [];
   for (const row of rows.results) {
     const r = row as never as {
@@ -241,6 +248,9 @@ routes.get('/mechanics', async (c) => {
       serviceRadiusKm: r.service_radius_km,
       submittedAt: r.submitted_at,
       documentKey: r.document_key,
+      documentUrl: r.document_key
+        ? (await presignDownload(c.env, origin, r.document_key, 3600)).url
+        : null,
       ratingAverage: r.rating_count > 0 ? Math.round((r.rating_sum / r.rating_count) * 10) / 10 : 0,
       ratingCount: r.rating_count,
       jobsCompleted: r.jobs_completed,
@@ -691,6 +701,418 @@ routes.post('/service-categories', async (c) => {
   return ok({ ...input }, c.get('requestId'), 201);
 });
 
+/** Edits take effect at runtime for request creation and dispatch matching. */
+routes.put('/service-categories/:code', async (c) => {
+  const code = c.req.param('code');
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+  const input = parseInput(serviceCategorySchema, { ...body, code });
+  const existing = await c.env.DB.prepare('SELECT code FROM service_categories WHERE code = ?')
+    .bind(code)
+    .first();
+  if (!existing) throw errors.notFound('Service category not found.');
+  await c.env.DB.prepare(
+    `UPDATE service_categories SET name_en = ?, name_hi = ?, icon = ?, required_skills = ?,
+       required_equipment = ?, active = ?, sort = ? WHERE code = ?`,
+  )
+    .bind(
+      input.nameEn,
+      input.nameHi,
+      input.icon,
+      JSON.stringify(input.requiredSkills),
+      JSON.stringify(input.requiredEquipment),
+      input.active ? 1 : 0,
+      input.sort,
+      code,
+    )
+    .run();
+  return ok({ ...input, code }, c.get('requestId'));
+});
+
+// ---------------------------------------------------------------------------
+// Coupons
+// ---------------------------------------------------------------------------
+
+routes.get('/coupons', async (c) => {
+  const rows = await c.env.DB.prepare(
+    'SELECT * FROM coupons ORDER BY created_at DESC LIMIT 200',
+  ).all<{
+    id: string;
+    code: string;
+    description: string | null;
+    percent_off: number;
+    min_amount_cents: number;
+    max_uses: number | null;
+    used_count: number;
+    valid_from: string | null;
+    valid_until: string | null;
+    active: number;
+    created_at: string;
+  }>();
+  return ok(
+    {
+      items: rows.results.map((r) => ({
+        id: r.id,
+        code: r.code,
+        description: r.description,
+        percentOff: r.percent_off,
+        minAmountCents: r.min_amount_cents,
+        maxUses: r.max_uses,
+        usedCount: r.used_count,
+        validFrom: r.valid_from,
+        validUntil: r.valid_until,
+        active: r.active === 1,
+        createdAt: r.created_at,
+      })),
+    },
+    c.get('requestId'),
+  );
+});
+
+routes.post('/coupons', async (c) => {
+  const admin = await requireUser(c);
+  await enforceRateLimit(c.env, 'coupon', admin.id, 20, 60, 'Too many coupon operations. Please wait.');
+  const input = parseInput(createCouponSchema, await c.req.json().catch(() => ({})));
+  const existing = await c.env.DB.prepare('SELECT id FROM coupons WHERE code = ?')
+    .bind(input.code)
+    .first<{ id: string }>();
+  if (existing) throw errors.conflict('COUPON_EXISTS', 'A coupon with this code already exists.');
+  const id = newId();
+  await c.env.DB.prepare(
+    `INSERT INTO coupons (id, code, description, percent_off, min_amount_cents, max_uses,
+                          valid_from, valid_until, active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+  )
+    .bind(
+      id,
+      input.code,
+      input.description ?? null,
+      input.percentOff,
+      input.minAmountCents,
+      input.maxUses ?? null,
+      input.validFrom ?? null,
+      input.validUntil ?? null,
+      nowIso(),
+      nowIso(),
+    )
+    .run();
+  await audit(c.env, {
+    actorUserId: admin.id,
+    actorRole: 'ADMIN',
+    action: 'COUPON_CREATED',
+    entityType: 'coupon',
+    entityId: id,
+    data: { code: input.code, percentOff: input.percentOff },
+    requestId: c.get('requestId'),
+  });
+  return ok({ id, code: input.code, percentOff: input.percentOff }, c.get('requestId'), 201);
+});
+
+routes.post('/coupons/:id/toggle', async (c) => {
+  const admin = await requireUser(c);
+  await enforceRateLimit(c.env, 'coupon', admin.id, 20, 60, 'Too many coupon operations. Please wait.');
+  const result = await c.env.DB.prepare(
+    'UPDATE coupons SET active = CASE WHEN active = 1 THEN 0 ELSE 1, updated_at = ? WHERE id = ?',
+  )
+    .bind(nowIso(), c.req.param('id'))
+    .run();
+  if (result.meta.changes === 0) throw errors.notFound('Coupon not found.');
+  await audit(c.env, {
+    actorUserId: admin.id,
+    actorRole: 'ADMIN',
+    action: 'COUPON_TOGGLED',
+    entityType: 'coupon',
+    entityId: c.req.param('id'),
+    requestId: c.get('requestId'),
+  });
+  return ok({ toggled: true }, c.get('requestId'));
+});
+
+// ---------------------------------------------------------------------------
+// Payments + refunds
+// ---------------------------------------------------------------------------
+
+routes.get('/payments', async (c) => {
+  const rows = await c.env.DB.prepare(
+    `SELECT p.*, e.reference, u.full_name AS driver_name
+     FROM payments p
+     JOIN emergency_requests e ON e.id = p.request_id
+     JOIN users u ON u.id = e.driver_user_id
+     ORDER BY p.created_at DESC LIMIT 100`,
+  ).all<{
+    id: string;
+    request_id: string;
+    reference: string;
+    driver_name: string;
+    provider: string;
+    provider_ref: string | null;
+    status: string;
+    amount_cents: number;
+    method: string | null;
+    coupon_code: string | null;
+    refunded_at: string | null;
+    refund_reason: string | null;
+    refunded_cents: number;
+    paid_at: string | null;
+    created_at: string;
+  }>();
+  return ok(
+    {
+      items: rows.results.map((r) => ({
+        id: r.id,
+        requestId: r.request_id,
+        reference: r.reference,
+        driverName: r.driver_name,
+        provider: r.provider,
+        providerRef: r.provider_ref,
+        status: r.status,
+        amountCents: r.amount_cents,
+        method: r.method,
+        couponCode: r.coupon_code,
+        refundedAt: r.refunded_at,
+        refundReason: r.refund_reason,
+        refundedCents: r.refunded_cents ?? 0,
+        paidAt: r.paid_at,
+        createdAt: r.created_at,
+      })),
+    },
+    c.get('requestId'),
+  );
+});
+
+/** Refund a settled payment — full amount by default, or a partial amount. */
+routes.post('/payments/:id/refund', async (c) => {
+  const admin = await requireUser(c);
+  await enforceRateLimit(c.env, 'admin-money', admin.id, 10, 300, 'Too many refund attempts. Please wait.');
+  const body = (await c.req.json().catch(() => ({}))) as { reason?: string; amountCents?: number };
+  const payment = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?')
+    .bind(c.req.param('id'))
+    .first<{
+      id: string;
+      request_id: string;
+      provider: string;
+      provider_ref: string | null;
+      status: string;
+      amount_cents: number;
+      refunded_cents: number;
+    }>();
+  if (!payment) throw errors.notFound('Payment not found.');
+  if (payment.status !== 'PAID') {
+    throw errors.conflict('PAYMENT_NOT_REFUNDABLE', 'Only paid payments can be refunded.');
+  }
+  const alreadyRefunded = payment.refunded_cents ?? 0;
+  const remainingCents = payment.amount_cents - alreadyRefunded;
+  if (remainingCents <= 0) {
+    throw errors.conflict('PAYMENT_ALREADY_REFUNDED', 'This payment has already been fully refunded.');
+  }
+  if (body.amountCents !== undefined) {
+    if (!Number.isInteger(body.amountCents) || body.amountCents <= 0) {
+      throw errors.validation('amountCents must be a positive whole number.');
+    }
+    if (body.amountCents > remainingCents) {
+      throw errors.validation(
+        `Refund cannot exceed the remaining ₹${Math.floor(remainingCents / 100)}.`,
+      );
+    }
+  }
+  const refundCents = body.amountCents ?? remainingCents;
+  const isFull = alreadyRefunded + refundCents >= payment.amount_cents;
+
+  if (payment.provider !== 'cash') {
+    if (!payment.provider_ref) throw errors.conflict('NO_PROVIDER_REF', 'Payment has no provider reference.');
+    const provider = getPaymentProvider(c.env);
+    if (!provider.refund) {
+      throw errors.unavailable('REFUND_UNSUPPORTED', 'The configured payment provider does not support refunds.', 501);
+    }
+    const result = await provider.refund(payment.provider_ref, refundCents).catch(() => ({ status: 'FAILED' as const }));
+    if (result.status !== 'REFUNDED') {
+      throw errors.unavailable('REFUND_FAILED', 'The payment provider rejected the refund.', 502);
+    }
+  }
+
+  const request = await c.env.DB.prepare(
+    'SELECT id, driver_user_id, assigned_mechanic_user_id, reference FROM emergency_requests WHERE id = ?',
+  )
+    .bind(payment.request_id)
+    .first<{ id: string; driver_user_id: string; assigned_mechanic_user_id: string | null; reference: string }>();
+  const cfg = await getConfig(c.env);
+  // Reverse exactly the payout credited for the refunded slice — never below zero.
+  const payout = computeMechanicPayout(refundCents, cfg.pricing.platformFeePercent);
+  const now = nowIso();
+  const refundNote = isFull
+    ? (body.reason ?? null)
+    : `Partial refund of ₹${Math.floor(refundCents / 100)}${body.reason ? ` — ${body.reason}` : ''}`;
+
+  await c.env.DB.batch([
+    c.env.DB.prepare(
+      `UPDATE payments SET refunded_cents = refunded_cents + ?, refund_reason = ?, updated_at = ?${
+        isFull ? ", status = 'REFUNDED', refunded_at = ?" : ''
+      } WHERE id = ?`,
+    ).bind(...(isFull ? [refundCents, refundNote, now, now, payment.id] : [refundCents, refundNote, now, payment.id])),
+    ...(isFull
+      ? [
+          c.env.DB.prepare(
+            `UPDATE emergency_requests SET payment_status = 'REFUNDED', updated_at = ?
+             WHERE id = ? AND payment_status = 'PAID'`,
+          ).bind(now, payment.request_id),
+        ]
+      : []),
+    ...(request?.assigned_mechanic_user_id
+      ? [
+          c.env.DB.prepare(
+            'UPDATE mechanics SET earnings_cents = MAX(earnings_cents - ?, 0), updated_at = ? WHERE user_id = ?',
+          ).bind(payout.payoutCents, now, request.assigned_mechanic_user_id),
+          c.env.DB.prepare(
+            isFull
+              ? 'UPDATE jobs SET earnings_cents = 0 WHERE request_id = ? AND deleted_at IS NULL'
+              : 'UPDATE jobs SET earnings_cents = MAX(earnings_cents - ?, 0) WHERE request_id = ? AND deleted_at IS NULL',
+          ).bind(...(isFull ? [payment.request_id] : [payout.payoutCents, payment.request_id])),
+        ]
+      : []),
+  ]);
+
+  const amountLabel = `₹${Math.floor(refundCents / 100)}`;
+  if (request) {
+    await recordEvent(c.env, {
+      requestId: request.id,
+      type: 'PAYMENT_REFUNDED',
+      message: `${isFull ? 'Payment' : 'Partial payment'} of ${amountLabel} refunded${body.reason ? ` — ${body.reason}` : ''}`,
+      actorRole: 'ADMIN',
+      actorUserId: admin.id,
+      data: { paymentId: payment.id, amountCents: refundCents, partial: !isFull },
+    });
+    await notify(c.env, {
+      userId: request.driver_user_id,
+      type: 'PAYMENT_REFUNDED',
+      title: 'Payment refunded',
+      body: `${amountLabel} for ${request.reference} has been refunded.`,
+      data: { requestId: request.id, paymentId: payment.id, amountCents: refundCents },
+      requestId: request.id,
+    }).catch(() => undefined);
+  }
+
+  await audit(c.env, {
+    actorUserId: admin.id,
+    actorRole: 'ADMIN',
+    action: 'PAYMENT_REFUNDED',
+    entityType: 'payment',
+    entityId: payment.id,
+    data: { requestId: payment.request_id, amountCents: refundCents, partial: !isFull, reason: body.reason ?? null },
+    requestId: c.get('requestId'),
+  });
+
+  return ok(
+    {
+      refund: {
+        paymentId: payment.id,
+        amountCents: refundCents,
+        refundedCents: alreadyRefunded + refundCents,
+        partial: !isFull,
+        status: isFull ? 'REFUNDED' : 'PAID',
+      },
+    },
+    c.get('requestId'),
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Payout requests (mechanic withdrawals)
+// ---------------------------------------------------------------------------
+
+routes.get('/payouts', async (c) => {
+  const status = c.req.query('status');
+  const rows = await c.env.DB.prepare(
+    `SELECT p.*, u.full_name, u.email
+     FROM payout_requests p JOIN users u ON u.id = p.mechanic_user_id
+     ${status ? 'WHERE p.status = ?' : ''}
+     ORDER BY p.created_at DESC LIMIT 100`,
+  )
+    .bind(...(status ? [status] : []))
+    .all<{
+      id: string;
+      mechanic_user_id: string;
+      full_name: string;
+      email: string;
+      amount_cents: number;
+      status: string;
+      account_json: string;
+      note: string | null;
+      decided_at: string | null;
+      created_at: string;
+    }>();
+  return ok(
+    {
+      items: rows.results.map((r) => ({
+        id: r.id,
+        mechanicUserId: r.mechanic_user_id,
+        mechanicName: r.full_name,
+        mechanicEmail: r.email,
+        amountCents: r.amount_cents,
+        status: r.status,
+        account: safeJson(r.account_json),
+        note: r.note,
+        decidedAt: r.decided_at,
+        createdAt: r.created_at,
+      })),
+    },
+    c.get('requestId'),
+  );
+});
+
+routes.post('/payouts/:id/decide', async (c) => {
+  const admin = await requireUser(c);
+  await enforceRateLimit(c.env, 'admin-money', admin.id, 10, 300, 'Too many payout decisions. Please wait.');
+  const body = (await c.req.json().catch(() => ({}))) as { decision?: string; note?: string };
+  if (body.decision !== 'PAID' && body.decision !== 'REJECTED') {
+    throw errors.validation('decision must be PAID or REJECTED.');
+  }
+  const payout = await c.env.DB.prepare('SELECT * FROM payout_requests WHERE id = ?')
+    .bind(c.req.param('id'))
+    .first<{ id: string; mechanic_user_id: string; amount_cents: number; status: string }>();
+  if (!payout) throw errors.notFound('Payout request not found.');
+  if (payout.status !== 'PENDING') {
+    throw errors.conflict('PAYOUT_NOT_PENDING', 'This payout has already been decided.');
+  }
+
+  const now = nowIso();
+  await c.env.DB.prepare(
+    `UPDATE payout_requests SET status = ?, note = COALESCE(?, note), decided_by = ?, decided_at = ?, updated_at = ?
+     WHERE id = ?`,
+  )
+    .bind(body.decision, body.note ?? null, admin.id, now, now, payout.id)
+    .run();
+
+  if (body.decision === 'PAID') {
+    await notify(c.env, {
+      userId: payout.mechanic_user_id,
+      type: 'PAYOUT_PAID',
+      title: 'Payout sent',
+      body: `Your payout of ₹${Math.round(payout.amount_cents / 100)} is on its way.`,
+      data: { payoutId: payout.id },
+    }).catch(() => undefined);
+  }
+
+  await audit(c.env, {
+    actorUserId: admin.id,
+    actorRole: 'ADMIN',
+    action: `PAYOUT_${body.decision}`,
+    entityType: 'payout_request',
+    entityId: payout.id,
+    data: { mechanicUserId: payout.mechanic_user_id, amountCents: payout.amount_cents, note: body.note ?? null },
+    requestId: c.get('requestId'),
+  });
+
+  return ok({ payout: { id: payout.id, status: body.decision } }, c.get('requestId'));
+});
+
+function safeJson(raw: string | null): unknown {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Audit logs + disputes
 // ---------------------------------------------------------------------------
@@ -756,6 +1178,7 @@ routes.get('/disputes', async (c) => {
           raised_by: string;
           raised_by_name: string;
           reason: string;
+          category: string | null;
           status: string;
           resolution: string | null;
           created_at: string;
@@ -766,6 +1189,7 @@ routes.get('/disputes', async (c) => {
           reference: d.reference,
           raisedBy: d.raised_by,
           raisedByName: d.raised_by_name,
+          category: d.category ?? 'OTHER',
           reason: d.reason,
           status: d.status,
           resolution: d.resolution,
@@ -781,13 +1205,24 @@ routes.post('/disputes/:id/resolve', async (c) => {
   const admin = await requireUser(c);
   const body = (await c.req.json().catch(() => ({}))) as { resolution?: string };
   if (!body.resolution) throw errors.validation('resolution is required.');
+  const dispute = await c.env.DB.prepare(
+    `SELECT d.id, d.request_id, d.raised_by, d.status, e.reference
+     FROM disputes d JOIN emergency_requests e ON e.id = d.request_id
+     WHERE d.id = ?`,
+  )
+    .bind(c.req.param('id'))
+    .first<{ id: string; request_id: string; raised_by: string; status: string; reference: string }>();
+  if (!dispute) throw errors.notFound('Dispute not found.');
+  if (dispute.status === 'RESOLVED') {
+    throw errors.conflict('DISPUTE_ALREADY_RESOLVED', 'This dispute is already resolved.');
+  }
   const result = await c.env.DB.prepare(
     `UPDATE disputes SET status = 'RESOLVED', resolution = ?, resolved_by = ?, resolved_at = ?, updated_at = ?
-     WHERE id = ?`,
+     WHERE id = ? AND status != 'RESOLVED'`,
   )
     .bind(body.resolution, admin.id, nowIso(), nowIso(), c.req.param('id'))
     .run();
-  if (result.meta.changes === 0) throw errors.notFound('Dispute not found.');
+  if (result.meta.changes === 0) throw errors.conflict('DISPUTE_ALREADY_RESOLVED', 'This dispute is already resolved.');
   await audit(c.env, {
     actorUserId: admin.id,
     actorRole: 'ADMIN',
@@ -797,6 +1232,18 @@ routes.post('/disputes/:id/resolve', async (c) => {
     data: { resolution: body.resolution },
     requestId: c.get('requestId'),
   });
+  await notify(c.env, {
+    userId: dispute.raised_by,
+    type: 'DISPUTE_RESOLVED',
+    title: 'Dispute resolved',
+    body: `Your dispute on ${dispute.reference} was resolved: ${body.resolution.slice(0, 160)}`,
+    data: {
+      disputeId: dispute.id,
+      requestId: dispute.request_id,
+      reference: dispute.reference,
+      resolution: body.resolution,
+    },
+  }).catch(() => undefined);
   return ok({ resolved: true }, c.get('requestId'));
 });
 

@@ -10,6 +10,7 @@ import {
   emergencyListQuerySchema,
   escalateEmergencySchema,
   shareEmergencySchema,
+  sendMessageSchema,
   updateEmergencyLocationSchema,
 } from '@rr/validation';
 import { newId, newReference, nowIso } from '../lib/ids';
@@ -18,6 +19,7 @@ import { recordEvent } from '../lib/events';
 import {
   appendLocation,
   assertRequestAccess,
+  assertDispatchAccess,
   loadRequestDto,
   mapRequestRow,
   requireRequest,
@@ -28,8 +30,13 @@ import { ACTIVE_REQUEST_STATUSES } from '../lib/state-machine';
 import { startDispatch } from '../dispatch/service';
 import { notify } from '../lib/notify';
 import { mapInvoice, mapPayment } from '../lib/mappers';
-import { createPayment as createPaymentService } from '../lib/payment-service';
+import { createPayment as createPaymentService, verifyPaymentCheckout, ensureInvoice, computeRequestTotal } from '../lib/payment-service';
+import { applyCoupon } from '../lib/coupons';
+import { getConfig } from '../lib/config';
+import { requirementsForIssue } from '../lib/categories';
+import { ensureInvoicePdf } from '../lib/invoice-pdf';
 import { enforceRateLimit } from '../lib/rate-limit';
+import { broadcast, requestRoom } from '../lib/realtime';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -80,13 +87,29 @@ routes.post('/', async (c) => {
 
   const id = newId();
   const now = nowIso();
-  const isAccident = input.issueType === 'ACCIDENT';
-  const requiredSkills = requiredSkillsForIssue(input.issueType);
-  const requiredEquipment = requiredEquipmentForIssue(input.issueType);
+  const accident = input.accidentMode ?? null;
+  const isAccident = input.issueType === 'ACCIDENT' || accident !== null;
+  // Active admin-managed service category wins over built-in defaults.
+  const requirements = await requirementsForIssue(c.env, input.issueType);
+  const requiredSkills = requirements.requiredSkills;
+  const requiredEquipment = requirements.requiredEquipment;
 
-  const initialStatus = input.accidentMode?.needsTowing && !input.accidentMode.driverInjured
-    ? 'CREATED'
-    : 'CREATED';
+  // Accident triage: intake stays in CREATED (the dispatch state machine owns
+  // transitions) but accidents are weighted up so they surface first.
+  const effectiveUrgency = !isAccident
+    ? input.urgency
+    : accident && (accident.anyoneInjured || accident.driverInjured || accident.medicalAssistance)
+      ? 'CRITICAL'
+      : input.urgency === 'LOW' || input.urgency === 'NORMAL'
+        ? 'HIGH'
+        : input.urgency;
+  const wantsTowing = input.issueType === 'ACCIDENT' || Boolean(accident?.needsTowing);
+  if (wantsTowing) {
+    if (!requiredSkills.includes('towing')) requiredSkills.push('towing');
+    if (!requiredEquipment.includes('tow_hook')) requiredEquipment.push('tow_hook');
+  }
+
+  const initialStatus = 'CREATED';
 
   await c.env.DB.prepare(
     `INSERT INTO emergency_requests
@@ -104,7 +127,7 @@ routes.post('/', async (c) => {
       input.issueType,
       input.issueType,
       input.description ?? null,
-      input.urgency,
+      effectiveUrgency,
       initialStatus,
       input.accidentMode ? JSON.stringify(input.accidentMode) : null,
       input.latitude,
@@ -135,7 +158,7 @@ routes.post('/', async (c) => {
     message: `Emergency request created (${input.issueType.replace(/_/g, ' ')})`,
     actorRole: user.role,
     actorUserId: user.id,
-    data: { channel: input.channel, urgency: input.urgency, accident: isAccident },
+    data: { channel: input.channel, urgency: effectiveUrgency, accident: isAccident, towing: wantsTowing },
   });
 
   // Attach any pre-uploaded breakdown photos.
@@ -155,11 +178,20 @@ routes.post('/', async (c) => {
     action: 'EMERGENCY_CREATED',
     entityType: 'emergency_request',
     entityId: id,
-    data: { issueType: input.issueType, urgency: input.urgency },
+    data: { issueType: input.issueType, urgency: effectiveUrgency, accident: isAccident, towing: wantsTowing },
     requestId,
   });
 
   const request = await requireRequest(c.env, id);
+
+  await notify(c.env, {
+    userId: user.id,
+    type: 'EMERGENCY_CREATED',
+    title: 'Help is on the way',
+    body: `Your request ${request.reference} was created. We are finding a nearby mechanic.`,
+    data: { requestId: id, reference: request.reference, issueType: input.issueType },
+    requestId: id,
+  });
 
   if (input.accidentMode?.medicalAssistance || input.accidentMode?.anyoneInjured) {
     await notify(c.env, {
@@ -187,38 +219,6 @@ routes.post('/', async (c) => {
   const dto = await loadRequestDto(c.env, id, { withTimeline: true });
   return ok({ request: dto }, c.get('requestId'), 201);
 });
-
-function requiredSkillsForIssue(issueType: string): string[] {
-  const map: Record<string, string[]> = {
-    BATTERY: ['battery', 'electrical'],
-    FLAT_TYRE: ['tyre'],
-    OUT_OF_FUEL: ['fuel'],
-    ENGINE_PROBLEM: ['engine'],
-    ELECTRICAL_PROBLEM: ['electrical'],
-    OVERHEATING: ['cooling', 'engine'],
-    LOCKOUT: ['lockout'],
-    ACCIDENT: ['bodywork', 'towing'],
-    GENERAL_BREAKDOWN: ['general'],
-    DONT_KNOW: ['general'],
-  };
-  return map[issueType] ?? ['general'];
-}
-
-function requiredEquipmentForIssue(issueType: string): string[] {
-  const map: Record<string, string[]> = {
-    BATTERY: ['jumper_cables', 'multimeter'],
-    FLAT_TYRE: ['jack', 'wheel_spanner', 'spare_tyre'],
-    OUT_OF_FUEL: ['fuel_can'],
-    ENGINE_PROBLEM: ['obd_scanner', 'basic_tools'],
-    ELECTRICAL_PROBLEM: ['multimeter', 'basic_tools'],
-    OVERHEATING: ['coolant', 'basic_tools'],
-    LOCKOUT: ['lockout_kit'],
-    ACCIDENT: ['tow_hook', 'first_aid'],
-    GENERAL_BREAKDOWN: ['basic_tools'],
-    DONT_KNOW: ['basic_tools'],
-  };
-  return map[issueType] ?? ['basic_tools'];
-}
 
 /** List requests visible to the current user. */
 routes.get('/', async (c) => {
@@ -328,7 +328,8 @@ routes.get('/track/:reference', async (c) => {
 routes.get('/:id', async (c) => {
   const user = await requireUser(c);
   const request = await requireRequest(c.env, c.req.param('id'));
-  assertRequestAccess(user, request);
+  // Dispatch-aware: a mechanic holding a pending offer can preview the request.
+  await assertDispatchAccess(c.env, user, request);
   const dto = await loadRequestDto(c.env, request.id, { withTimeline: true });
   // The arrival OTP is the driver's to share; the mechanic must type what the
   // customer reads out, so it is never returned to workshop roles.
@@ -342,7 +343,7 @@ routes.get('/:id', async (c) => {
 routes.get('/:id/timeline', async (c) => {
   const user = await requireUser(c);
   const request = await requireRequest(c.env, c.req.param('id'));
-  assertRequestAccess(user, request);
+  await assertDispatchAccess(c.env, user, request);
   const rows = await c.env.DB.prepare(
     'SELECT * FROM emergency_events WHERE request_id = ? ORDER BY created_at ASC, id ASC LIMIT 500',
   )
@@ -386,6 +387,74 @@ routes.get('/:id/attempts', async (c) => {
     .all();
   const { mapDispatchAttempt } = await import('../lib/mappers');
   return ok({ items: rows.results.map((r) => mapDispatchAttempt(r as never)) }, c.get('requestId'));
+});
+
+/** Chat history between driver and assigned mechanic (newest last). */
+routes.get('/:id/messages', async (c) => {
+  const user = await requireUser(c);
+  const request = await requireRequest(c.env, c.req.param('id'));
+  assertRequestAccess(user, request);
+  const rows = await c.env.DB.prepare(
+    `SELECT m.*, u.full_name AS sender_name FROM messages m
+     JOIN users u ON u.id = m.sender_user_id
+     WHERE m.request_id = ? ORDER BY m.created_at ASC LIMIT 500`,
+  )
+    .bind(request.id)
+    .all<{
+      id: string;
+      request_id: string;
+      sender_user_id: string;
+      sender_name: string;
+      body: string;
+      created_at: string;
+      read_at: string | null;
+    }>();
+  return ok(
+    {
+      items: rows.results.map((m) => ({
+        id: m.id,
+        requestId: m.request_id,
+        senderUserId: m.sender_user_id,
+        senderName: m.sender_name,
+        body: m.body,
+        createdAt: m.created_at,
+        readAt: m.read_at,
+      })),
+    },
+    c.get('requestId'),
+  );
+});
+
+/** Send a chat message on an active request. */
+routes.post('/:id/messages', async (c) => {
+  const user = await requireUser(c);
+  const request = await requireRequest(c.env, c.req.param('id'));
+  assertRequestAccess(user, request);
+  if (request.status === 'CANCELLED' || request.status === 'FAILED') {
+    throw errors.conflict('CHAT_CLOSED', 'Chat is closed for this request.');
+  }
+  await enforceRateLimit(c.env, 'chat', user.id, 60, 60, 'You are sending messages too fast.');
+  const input = parseInput(sendMessageSchema, await c.req.json().catch(() => ({})));
+  const message = {
+    id: newId(),
+    requestId: request.id,
+    senderUserId: user.id,
+    senderName: user.fullName,
+    body: input.body,
+    createdAt: nowIso(),
+    readAt: null as string | null,
+  };
+  await c.env.DB.prepare(
+    'INSERT INTO messages (id, request_id, sender_user_id, body, created_at) VALUES (?, ?, ?, ?, ?)',
+  )
+    .bind(message.id, request.id, user.id, input.body, message.createdAt)
+    .run();
+  await broadcast(c.env, requestRoom(request.id), {
+    type: 'chat.message',
+    requestId: request.id,
+    payload: { message },
+  });
+  return ok({ message }, c.get('requestId'), 201);
 });
 
 routes.get('/:id/diagnosis', async (c) => {
@@ -467,17 +536,59 @@ routes.post('/:id/cancel', async (c) => {
     });
   }
 
+  // Cancellation fee: free inside the grace window; after that a mechanic may
+  // already be en route. Only driver-initiated cancellations are charged.
+  const config = await getConfig(c.env);
+  const elapsedMs = Date.now() - Date.parse(request.created_at);
+  const chargeable =
+    user.role === 'DRIVER' &&
+    elapsedMs > config.cancellation.freeWindowSeconds * 1000 &&
+    (Boolean(request.assigned_mechanic_user_id) || request.dispatch_round > 0);
+  const cancellationFeeCents = chargeable ? config.cancellation.feeCents : 0;
+
+  if (cancellationFeeCents > 0) {
+    await c.env.DB.prepare(
+      `UPDATE emergency_requests SET payment_status = 'PENDING', total_amount_cents = ?, updated_at = ? WHERE id = ?`,
+    )
+      .bind(cancellationFeeCents, nowIso(), request.id)
+      .run();
+    const fresh = await requireRequest(c.env, request.id);
+    await ensureInvoice(c.env, fresh, cancellationFeeCents, { taxCents: 0 });
+    await recordEvent(c.env, {
+      requestId: request.id,
+      type: 'CANCELLATION_FEE_APPLIED',
+      message: `Cancellation fee of ₹${Math.round(cancellationFeeCents / 100)} applied`,
+      actorRole: user.role,
+      actorUserId: user.id,
+      data: { amountCents: cancellationFeeCents },
+    });
+    await notify(c.env, {
+      userId: request.driver_user_id,
+      type: 'CANCELLATION_FEE_APPLIED',
+      title: 'Cancellation fee applied',
+      body: `A ₹${Math.round(cancellationFeeCents / 100)} cancellation fee applies because a mechanic was already on the way. You can pay it from your request page.`,
+      data: { requestId: request.id, amountCents: cancellationFeeCents },
+      requestId: request.id,
+    });
+  }
+
   await audit(c.env, {
     actorUserId: user.id,
     actorRole: user.role,
     action: 'EMERGENCY_CANCELLED',
     entityType: 'emergency_request',
     entityId: request.id,
-    data: { reason: input.reason },
+    data: { reason: input.reason, cancellationFeeCents },
     requestId: c.get('requestId'),
   });
 
-  return ok({ request: await loadRequestDto(c.env, request.id, { withTimeline: true }) }, c.get('requestId'));
+  return ok(
+    {
+      request: await loadRequestDto(c.env, request.id, { withTimeline: true }),
+      cancellationFeeCents,
+    },
+    c.get('requestId'),
+  );
 });
 
 /** Escalate to operations (driver-initiated or automatic). */
@@ -541,6 +652,7 @@ routes.post('/:id/share', async (c) => {
     phone: string;
   }>;
   if (selected.length === 0) throw errors.validation('Select at least one valid contact.');
+  await enforceRateLimit(c.env, 'share', user.id, 10, 300, 'You are sharing too often. Please wait.');
 
   await recordEvent(c.env, {
     requestId: request.id,
@@ -551,13 +663,15 @@ routes.post('/:id/share', async (c) => {
     data: { contacts: selected.map((s) => s.name) },
   });
 
-  const trackUrl = `/track/${request.reference}`;
+  // Absolute URL so the link is tappable from an SMS on any device.
+  const trackUrl = `${new URL(c.req.url).origin}/track?ref=${request.reference}`;
   for (const contact of selected) {
     await c.env.TASKS.send({
       kind: 'notification.dispatch',
       channels: ['SMS'],
       type: 'STATUS_SHARED',
       userId: user.id,
+      smsTo: contact.phone,
       title: 'Live assistance status',
       body: `${user.fullName} is receiving roadside help. Track: ${trackUrl}`,
       data: { reference: request.reference, contact: contact.name },
@@ -575,18 +689,31 @@ routes.post('/:id/payment', async (c) => {
   if (request.driver_user_id !== user.id && user.role !== 'ADMIN') {
     throw errors.forbidden('Only the requesting driver can pay.');
   }
-  if (!['COMPLETED', 'PAYMENT_PENDING'].includes(request.status)) {
+  const feeDue =
+    request.status === 'CANCELLED' &&
+    request.payment_status === 'PENDING' &&
+    (request.total_amount_cents ?? 0) > 0;
+  if (!['COMPLETED', 'PAYMENT_PENDING'].includes(request.status) && !feeDue) {
     throw errors.conflict('PAYMENT_NOT_DUE', 'Payment is not due yet.');
   }
-  const body = await c.req.json().catch(() => ({}));
-  const method = (body as { method?: string }).method ?? 'UPI';
+  const body = (await c.req.json().catch(() => ({}))) as { method?: string; couponCode?: string };
+  const method = body.method ?? 'UPI';
   if (!['CARD', 'UPI', 'NETBANKING', 'WALLET', 'CASH'].includes(method)) {
     throw errors.validation('Unsupported payment method.');
   }
+  await enforceRateLimit(
+    c.env,
+    'payment',
+    user.id,
+    10,
+    60,
+    'Too many payment attempts. Please wait a moment and try again.',
+  );
 
   const payment = await createPaymentService(c.env, request, {
     method: method as 'CARD' | 'UPI' | 'NETBANKING' | 'WALLET' | 'CASH',
     actorUserId: user.id,
+    couponCode: body.couponCode?.trim() || null,
   });
 
   const fresh = await requireRequest(c.env, request.id);
@@ -596,16 +723,66 @@ routes.post('/:id/payment', async (c) => {
   );
 });
 
+/** Previews a coupon's discount without committing it (used before paying). */
+routes.post('/:id/coupon/preview', async (c) => {
+  const user = await requireUser(c);
+  await enforceRateLimit(c.env, 'coupon', user.id, 20, 60, 'Too many coupon checks. Please wait.');
+  const request = await requireRequest(c.env, c.req.param('id'));
+  assertRequestAccess(user, request);
+  if (request.driver_user_id !== user.id && user.role !== 'ADMIN') {
+    throw errors.forbidden('Only the requesting driver can apply a coupon.');
+  }
+  const body = (await c.req.json().catch(() => ({}))) as { code?: string };
+  if (!body.code?.trim()) throw errors.validation('Enter a coupon code.');
+  const totalCents = request.total_amount_cents ?? (await computeRequestTotal(c.env, request));
+  const applied = await applyCoupon(c.env, body.code, totalCents);
+  return ok({ coupon: applied, totalCents, discountedTotalCents: totalCents - applied.discountCents }, c.get('requestId'));
+});
+
+/** Confirms an online checkout (Razorpay signature verification). */
+routes.post('/:id/payment/verify', async (c) => {
+  const user = await requireUser(c);
+  const request = await requireRequest(c.env, c.req.param('id'));
+  assertRequestAccess(user, request);
+  if (request.driver_user_id !== user.id && user.role !== 'ADMIN') {
+    throw errors.forbidden('Only the requesting driver can verify this payment.');
+  }
+  const body = (await c.req.json().catch(() => ({}))) as {
+    orderId?: string;
+    paymentId?: string;
+    signature?: string;
+  };
+  if (!body.orderId || !body.paymentId || !body.signature) {
+    throw errors.validation('Missing payment verification details.');
+  }
+
+  const result = await verifyPaymentCheckout(c.env, request, {
+    orderId: body.orderId,
+    paymentId: body.paymentId,
+    signature: body.signature,
+    actorUserId: user.id,
+  });
+
+  const fresh = await requireRequest(c.env, request.id);
+  return ok(
+    { payment: result, request: await loadRequestDto(c.env, fresh.id, { withTimeline: false }) },
+    c.get('requestId'),
+  );
+});
+
 routes.get('/:id/invoice', async (c) => {
   const user = await requireUser(c);
   const request = await requireRequest(c.env, c.req.param('id'));
   assertRequestAccess(user, request);
   const origin = new URL(c.req.url).origin;
-  const invoice = await c.env.DB.prepare(
+  let invoice = await c.env.DB.prepare(
     'SELECT * FROM invoices WHERE request_id = ? ORDER BY created_at DESC LIMIT 1',
   )
     .bind(request.id)
     .first<Parameters<typeof mapInvoice>[1]>();
+  if (invoice) {
+    invoice = await ensureInvoicePdf(c.env, invoice);
+  }
   const payments = await c.env.DB.prepare(
     'SELECT * FROM payments WHERE request_id = ? ORDER BY created_at DESC',
   )

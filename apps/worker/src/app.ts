@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import type { Env } from './env';
-import { allowedOrigins, isDev } from './env';
+import { allowedOrigins, isDev, isProduction } from './env';
 import { attachUser } from './lib/auth';
 import { newId } from './lib/ids';
 import { fail } from './lib/response';
@@ -22,6 +22,10 @@ import realtimeRoutes from './routes/realtime';
 import operationsRoutes from './routes/operations';
 import adminRoutes from './routes/admin';
 import reviewRoutes from './routes/reviews';
+import disputeRoutes from './routes/disputes';
+import geoRoutes from './routes/geo';
+import paymentRoutes from './routes/payments';
+import catalogRoutes from './routes/catalog';
 import devRoutes from './routes/dev';
 
 export function createApp(): Hono<{ Bindings: Env }> {
@@ -53,6 +57,23 @@ export function createApp(): Hono<{ Bindings: Env }> {
     setResHeader(c, 'x-frame-options', 'DENY');
     setResHeader(c, 'referrer-policy', 'no-referrer');
     setResHeader(c, 'cross-origin-opener-policy', 'same-origin');
+    if (isProduction(c.env)) {
+      setResHeader(c, 'strict-transport-security', 'max-age=31536000; includeSubDomains');
+    }
+  });
+
+  // --- request completion log (observability) -------------------------------
+  app.use('*', async (c, next) => {
+    const started = Date.now();
+    await next();
+    if (c.req.path.startsWith('/api/')) {
+      logger.info(c.get('requestId') ?? 'n/a', 'request_completed', {
+        method: c.req.method,
+        path: c.req.path,
+        status: c.res.status,
+        ms: Date.now() - started,
+      });
+    }
   });
 
   // --- CORS (credentialed, allow-listed origins) -----------------------------
@@ -100,7 +121,17 @@ export function createApp(): Hono<{ Bindings: Env }> {
     const origin = c.req.header('origin');
     if (origin) {
       const allowed = allowedOrigins(c.env);
-      if (!allowed.includes(origin)) {
+      let ok = allowed.includes(origin);
+      if (!ok) {
+        // Same-origin (single-app deployment) always passes; the allow-list
+        // only gates cross-origin callers.
+        try {
+          ok = new URL(origin).host === new URL(c.req.url).host;
+        } catch {
+          ok = false;
+        }
+      }
+      if (!ok) {
         return fail('ORIGIN_NOT_ALLOWED', 'Origin not allowed.', c.get('requestId'), 403);
       }
     }
@@ -122,6 +153,10 @@ export function createApp(): Hono<{ Bindings: Env }> {
   app.route('/api/operations', operationsRoutes);
   app.route('/api/admin', adminRoutes);
   app.route('/api/reviews', reviewRoutes);
+app.route('/api/disputes', disputeRoutes);
+app.route('/api/geo', geoRoutes);
+  app.route('/api/payments', paymentRoutes);
+  app.route('/api/catalog', catalogRoutes);
   // Gated inside the router itself (requires ENABLE_SEED_ROUTES + non-production).
   app.route('/api/dev', devRoutes);
 

@@ -1,4 +1,5 @@
 import { ISSUE_REQUIRED_EQUIPMENT, ISSUE_REQUIRED_SKILLS, ISSUE_TYPES, type IssueType } from '@rr/config';
+import { configRequirements, getActiveCategory, parseJsonArray } from '../lib/categories';
 import type { Role, Urgency } from '@rr/types';
 import type { Env } from '../env';
 import { errors } from '../lib/errors';
@@ -79,6 +80,13 @@ export async function buildDispatchInput(env: Env, request: RequestRow): Promise
       vehicleModel = v.model;
     }
   }
+  // Runtime category effect: an active admin-managed service category
+  // overrides the request snapshot, which itself overrides built-in config.
+  const liveCategory = await getActiveCategory(env, request.issue_type);
+  const storedSkills = parseJsonArray(request.required_skills);
+  const storedEquipment = parseJsonArray(request.required_equipment);
+  const fallback = configRequirements(request.issue_type);
+
   return {
     requestId: request.id,
     latitude: request.latitude,
@@ -88,8 +96,16 @@ export async function buildDispatchInput(env: Env, request: RequestRow): Promise
     vehicleType,
     vehicleMake,
     vehicleModel,
-    requiredSkills: requiredSkillsFor(request.issue_type),
-    requiredEquipment: requiredEquipmentFor(request.issue_type),
+    requiredSkills: liveCategory
+      ? liveCategory.requiredSkills
+      : storedSkills?.length
+        ? storedSkills
+        : fallback.requiredSkills,
+    requiredEquipment: liveCategory
+      ? liveCategory.requiredEquipment
+      : storedEquipment?.length
+        ? storedEquipment
+        : fallback.requiredEquipment,
   };
 }
 

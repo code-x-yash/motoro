@@ -34,7 +34,8 @@ export async function rateLimit(
       if (parsed.resetAt > now) state = parsed;
     }
     state.count += 1;
-    const ttl = Math.max(1, Math.ceil((state.resetAt - now) / 1000));
+    // Cloudflare KV requires expirationTtl >= 60s; clamp so short windows still persist.
+    const ttl = Math.max(60, Math.ceil((state.resetAt - now) / 1000));
     await env.KV.put(key, JSON.stringify(state), { expirationTtl: ttl });
   } catch {
     // Fail open if KV is unavailable — availability beats strict limiting.

@@ -8,15 +8,19 @@ import {
   mechanicAvailabilitySchema,
   nearbyMechanicsSchema,
   paginationSchema,
+  payoutAccountSchema,
+  requestPayoutSchema,
   setMechanicStatusSchema,
   submitVerificationSchema,
   updateMechanicProfileSchema,
 } from '@rr/validation';
 import { mapMechanicProfile } from '../lib/mappers';
 import { getMechanic, requireMechanic, setMechanicStatus, recordMechanicLocation } from '../lib/mechanics';
-import { findCandidates, requiredEquipmentFor, requiredSkillsFor } from '../dispatch/service';
+import { findCandidates } from '../dispatch/service';
+import { requirementsForIssue } from '../lib/categories';
 import { newId, nowIso } from '../lib/ids';
 import { audit } from '../lib/audit';
+import { notify } from '../lib/notify';
 import { errors as appErrors } from '../lib/errors';
 
 const routes = new Hono<{ Bindings: Env }>();
@@ -334,6 +338,159 @@ routes.get('/me/earnings', async (c) => {
   );
 });
 
+/** Payout account (bank details saved for withdrawals). */
+routes.get('/me/payout-account', async (c) => {
+  const user = await requireUser(c);
+  const mechanic = await requireMechanic(c.env, user.id);
+  const raw = (mechanic as { bank_account_json?: string | null }).bank_account_json;
+  let account: unknown = null;
+  if (raw) {
+    try {
+      account = JSON.parse(raw);
+    } catch {
+      account = null;
+    }
+  }
+  return ok({ account }, c.get('requestId'));
+});
+
+routes.put('/me/payout-account', async (c) => {
+  const user = await requireUser(c);
+  await requireMechanic(c.env, user.id);
+  const input = parseInput(payoutAccountSchema, await c.req.json().catch(() => ({})));
+  await c.env.DB.prepare('UPDATE mechanics SET bank_account_json = ?, updated_at = ? WHERE user_id = ?')
+    .bind(JSON.stringify(input), nowIso(), user.id)
+    .run();
+  await audit(c.env, {
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'PAYOUT_ACCOUNT_SAVED',
+    entityType: 'mechanic',
+    entityId: user.id,
+    data: { ifsc: input.ifsc },
+    requestId: c.get('requestId'),
+  });
+  return ok({ account: input }, c.get('requestId'));
+});
+
+async function computePayoutBalance(env: Env, mechanicUserId: string) {
+  const earnings = await env.DB.prepare('SELECT earnings_cents FROM mechanics WHERE user_id = ?')
+    .bind(mechanicUserId)
+    .first<{ earnings_cents: number }>();
+  const sums = await env.DB.prepare(
+    `SELECT COALESCE(SUM(CASE WHEN status = 'PAID' THEN amount_cents END), 0) AS paid,
+            COALESCE(SUM(CASE WHEN status = 'PENDING' THEN amount_cents END), 0) AS pending
+     FROM payout_requests WHERE mechanic_user_id = ?`,
+  )
+    .bind(mechanicUserId)
+    .first<{ paid: number; pending: number }>();
+  const lifetimeCents = earnings?.earnings_cents ?? 0;
+  const paidOutCents = sums?.paid ?? 0;
+  const pendingPayoutCents = sums?.pending ?? 0;
+  return {
+    lifetimeCents,
+    paidOutCents,
+    pendingPayoutCents,
+    availableCents: Math.max(0, lifetimeCents - paidOutCents - pendingPayoutCents),
+  };
+}
+
+/** Withdrawable balance. */
+routes.get('/me/balance', async (c) => {
+  const user = await requireUser(c);
+  await requireMechanic(c.env, user.id);
+  const balance = await computePayoutBalance(c.env, user.id);
+  return ok({ balance }, c.get('requestId'));
+});
+
+/** Own payout request history. */
+routes.get('/me/payouts', async (c) => {
+  const user = await requireUser(c);
+  await requireMechanic(c.env, user.id);
+  const rows = await c.env.DB.prepare(
+    `SELECT * FROM payout_requests WHERE mechanic_user_id = ? ORDER BY created_at DESC LIMIT 50`,
+  )
+    .bind(user.id)
+    .all<{
+      id: string;
+      amount_cents: number;
+      status: string;
+      note: string | null;
+      decided_at: string | null;
+      created_at: string;
+    }>();
+  return ok(
+    {
+      items: rows.results.map((r) => ({
+        id: r.id,
+        amountCents: r.amount_cents,
+        status: r.status,
+        note: r.note,
+        decidedAt: r.decided_at,
+        createdAt: r.created_at,
+      })),
+    },
+    c.get('requestId'),
+  );
+});
+
+/** Request a withdrawal against available earnings. */
+routes.post('/me/payouts', async (c) => {
+  const user = await requireUser(c);
+  const mechanic = await requireMechanic(c.env, user.id);
+  const input = parseInput(requestPayoutSchema, await c.req.json().catch(() => ({})));
+  const raw = (mechanic as { bank_account_json?: string | null }).bank_account_json;
+  if (!raw) {
+    throw errors.conflict('PAYOUT_ACCOUNT_REQUIRED', 'Add your bank account before requesting a payout.');
+  }
+  const balance = await computePayoutBalance(c.env, user.id);
+  if (input.amountCents > balance.availableCents) {
+    throw errors.conflict(
+      'INSUFFICIENT_BALANCE',
+      `You can withdraw up to ₹${Math.floor(balance.availableCents / 100)}.`,
+    );
+  }
+  const payout = {
+    id: newId(),
+    amountCents: input.amountCents,
+    status: 'PENDING' as const,
+    note: input.note ?? null,
+    createdAt: nowIso(),
+  };
+  await c.env.DB.prepare(
+    `INSERT INTO payout_requests (id, mechanic_user_id, amount_cents, status, account_json, note, created_at, updated_at)
+     VALUES (?, ?, ?, 'PENDING', ?, ?, ?, ?)`,
+  )
+    .bind(payout.id, user.id, payout.amountCents, raw, payout.note, payout.createdAt, payout.createdAt)
+    .run();
+
+  const ops = await c.env.DB.prepare(
+    "SELECT id FROM users WHERE role IN ('OPERATIONS','ADMIN') AND status = 'ACTIVE'",
+  ).all<{ id: string }>();
+  await Promise.all(
+    ops.results.map((u) =>
+      notify(c.env, {
+        userId: u.id,
+        type: 'PAYOUT_REQUESTED',
+        title: 'Payout request',
+        body: `${user.fullName} requested a payout of ₹${Math.floor(payout.amountCents / 100)}.`,
+        data: { payoutId: payout.id },
+      }).catch(() => undefined),
+    ),
+  );
+
+  await audit(c.env, {
+    actorUserId: user.id,
+    actorRole: user.role,
+    action: 'PAYOUT_REQUESTED',
+    entityType: 'payout_request',
+    entityId: payout.id,
+    data: { amountCents: payout.amountCents },
+    requestId: c.get('requestId'),
+  });
+  return ok({ payout }, c.get('requestId'), 201);
+});
+
 /**
  * Ranked nearby mechanics (used by operations + demo tooling).
  * Internal scores are not exposed.
@@ -342,6 +499,8 @@ routes.get('/nearby', async (c) => {
   const user = await requireUser(c);
   if (!['DRIVER', 'OPERATIONS', 'ADMIN', 'MECHANIC'].includes(user.role)) throw errors.forbidden();
   const query = parseInput(nearbyMechanicsSchema, c.req.query());
+  const issueType = query.issueType ?? 'GENERAL_BREAKDOWN';
+  const requirements = await requirementsForIssue(c.env, issueType);
 
   const signals = await findCandidates(
     c.env,
@@ -349,13 +508,13 @@ routes.get('/nearby', async (c) => {
       requestId: '',
       latitude: query.latitude,
       longitude: query.longitude,
-      issueType: query.issueType ?? 'GENERAL_BREAKDOWN',
+      issueType,
       urgency: 'NORMAL',
       vehicleType: null,
       vehicleMake: null,
       vehicleModel: null,
-      requiredSkills: requiredSkillsFor(query.issueType ?? 'GENERAL_BREAKDOWN'),
-      requiredEquipment: requiredEquipmentFor(query.issueType ?? 'GENERAL_BREAKDOWN'),
+      requiredSkills: requirements.requiredSkills,
+      requiredEquipment: requirements.requiredEquipment,
     },
     { radiusKm: query.radiusKm },
   );

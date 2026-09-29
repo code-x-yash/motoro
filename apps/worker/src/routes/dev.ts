@@ -27,6 +27,8 @@ const DEMO_LAT = 19.076;
 const DEMO_LNG = 72.8777;
 
 const DELETION_ORDER = [
+  'push_subscriptions',
+  'messages', 'payout_requests', 'coupons', 'disputes',
   'reviews', 'payments', 'invoices', 'service_reports', 'job_photos', 'job_parts',
   'jobs', 'job_status_history', 'quote_items', 'quotes', 'diagnosis_items', 'diagnoses',
   'mechanic_assignments', 'dispatch_attempts', 'emergency_events', 'emergency_locations',

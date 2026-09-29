@@ -1,7 +1,9 @@
 import { createApp } from './app';
 import type { Env } from './env';
 import { runDispatchSweeps } from './dispatch/service';
+import { reconcilePendingPayments } from './lib/payment-service';
 import { logger } from './lib/logger';
+import { deliver } from './lib/delivery';
 import { EmergencyRoom } from './do/emergency-room';
 
 const app = createApp();
@@ -38,7 +40,14 @@ export default {
     ctx.waitUntil(
       (async () => {
         logger.info('cron', 'dispatch_sweep_start', { cron: event.cron });
-        await runDispatchSweeps(env);
+        try {
+          await runDispatchSweeps(env);
+        } catch (err) {
+          logger.error('cron', 'dispatch_sweep_failed', { error: String(err) });
+        }
+        await reconcilePendingPayments(env).catch((err) =>
+          logger.error('cron', 'payment_reconcile_failed', { error: String(err) }),
+        );
       })(),
     );
   },
@@ -51,21 +60,7 @@ export default {
 async function handleMessage(env: Env, body: QueueMessage): Promise<void> {
   switch (body.kind) {
     case 'notification.dispatch': {
-      const channels = (body.channels as string[]) ?? [];
-      const configured = channels.filter((c) => providerConfigured(env, c));
-      if (configured.length === 0) {
-        logger.info('queue', 'notification_dev_adapter', {
-          channel: channels.join(','),
-          type: body.type,
-        });
-        return;
-      }
-      // Real provider adapters (email/SMS/WhatsApp) plug in here. Credentials
-      // are read from environment variables only — never from the client.
-      logger.info('queue', 'notification_provider_dispatch', {
-        channels: configured.join(','),
-        type: body.type,
-      });
+      await deliver(env, body as unknown as Parameters<typeof deliver>[1]);
       return;
     }
     case 'analytics.event': {
@@ -83,13 +78,4 @@ async function handleMessage(env: Env, body: QueueMessage): Promise<void> {
     default:
       logger.warn('queue', 'unknown_message_kind', { kind: body.kind });
   }
-}
-
-function providerConfigured(env: Env, channel: string): boolean {
-  const map: Record<string, undefined | string> = {
-    EMAIL: (env as unknown as { EMAIL_PROVIDER_KEY?: string }).EMAIL_PROVIDER_KEY,
-    SMS: (env as unknown as { SMS_PROVIDER_KEY?: string }).SMS_PROVIDER_KEY,
-    WHATSAPP: (env as unknown as { WHATSAPP_PROVIDER_KEY?: string }).WHATSAPP_PROVIDER_KEY,
-  };
-  return Boolean(map[channel]);
 }

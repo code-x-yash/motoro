@@ -167,14 +167,29 @@ export async function destroySession(env: Env, token: string): Promise<void> {
   await env.KV.delete(KV_SESSION_PREFIX + tokenHash);
 }
 
-export async function revokeAllSessions(env: Env, userId: string): Promise<void> {
-  const rows = await env.DB.prepare('SELECT token_hash FROM sessions WHERE user_id = ? AND revoked_at IS NULL')
-    .bind(userId)
-    .all<{ token_hash: string }>();
-  await env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL')
-    .bind(nowIso(), userId)
-    .run();
-  await Promise.all(rows.results.map((r) => env.KV.delete(KV_SESSION_PREFIX + r.token_hash)));
+export async function revokeAllSessions(env: Env, userId: string, exceptTokenHash?: string): Promise<void> {
+  // Security hook: revoke every session for this user (optionally keeping the
+  // caller's own session, so a phone change doesn't sign the actor out too).
+  const rows = (
+    exceptTokenHash
+      ? await env.DB.prepare(
+          'SELECT token_hash FROM sessions WHERE user_id = ? AND revoked_at IS NULL AND token_hash != ?',
+        ).bind(userId, exceptTokenHash).all<{ token_hash: string }>()
+      : await env.DB.prepare('SELECT token_hash FROM sessions WHERE user_id = ? AND revoked_at IS NULL')
+          .bind(userId).all<{ token_hash: string }>()
+  ).results;
+  if (exceptTokenHash) {
+    await env.DB.prepare(
+      'UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND token_hash != ?',
+    )
+      .bind(nowIso(), userId, exceptTokenHash)
+      .run();
+  } else {
+    await env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL')
+      .bind(nowIso(), userId)
+      .run();
+  }
+  await Promise.all(rows.map((r) => env.KV.delete(KV_SESSION_PREFIX + r.token_hash)));
 }
 
 export function buildSessionCookie(env: Env, token: string): string {
