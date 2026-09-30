@@ -54,11 +54,21 @@ routes.get('/ticket', async (c) => {
 
   const ticket = randomToken(24);
   const ttlSeconds = 120;
-  await c.env.KV.put(
-    `ws_ticket:${ticket}`,
-    JSON.stringify({ room, userId: user.id, role: user.role, exp: Date.now() + ttlSeconds * 1000 }),
-    { expirationTtl: ttlSeconds },
-  );
+  try {
+    await c.env.KV.put(
+      `ws_ticket:${ticket}`,
+      JSON.stringify({ room, userId: user.id, role: user.role, exp: Date.now() + ttlSeconds * 1000 }),
+      { expirationTtl: ttlSeconds },
+    );
+  } catch {
+    // KV unavailable (or the free-tier put quota is spent): degrade to a
+    // clean 503 — REST keeps working, the client retries with backoff.
+    throw errors.unavailable(
+      'REALTIME_UNAVAILABLE',
+      'Live updates are temporarily unavailable. Please try again shortly.',
+      503,
+    );
+  }
 
   const url = new URL(c.req.url);
   const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';

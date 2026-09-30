@@ -80,7 +80,7 @@ export class EmergencyRoom {
     if (!raw) return new Response('invalid or expired ticket', { status: 401 });
     const record = raw as TicketRecord;
     if (record.exp < Date.now()) {
-      await this.env.KV.delete(`ws_ticket:${ticket}`);
+      await this.env.KV.delete(`ws_ticket:${ticket}`).catch(() => undefined);
       return new Response('ticket expired', { status: 401 });
     }
     if (record.room !== this.roomName()) return new Response('room mismatch', { status: 403 });

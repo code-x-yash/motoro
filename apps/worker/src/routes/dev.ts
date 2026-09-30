@@ -7,6 +7,7 @@ import { newId, newReference, nowIso, isoIn } from '../lib/ids';
 import { hashPassword } from '../lib/crypto';
 import { seedRoutesEnabled } from '../env';
 import { DEFAULT_CONFIG, ISSUE_TYPES, SKILL_CATALOG, EQUIPMENT_CATALOG } from '@rr/config';
+import { clearRateLimitMemory } from '../lib/rate-limit';
 
 /**
  * Development-only seed + demo utilities.
@@ -46,6 +47,27 @@ routes.post('/reset', async (c) => {
   }
   await c.env.DB.prepare('DELETE FROM users').run().catch(() => undefined);
   return ok({ reset: true }, c.get('requestId'));
+});
+
+/**
+ * Resets rate limiting: clears the in-process counters and any mirrored KV
+ * keys. Local test batteries call this instead of poking KV directly, since
+ * counters now live primarily in memory.
+ */
+routes.post('/clear-ratelimits', async (c) => {
+  assertSeedEnabled(c.env);
+  const memoryCleared = clearRateLimitMemory();
+  let kvCleared = 0;
+  try {
+    const listed = await c.env.KV.list({ prefix: 'rl:' });
+    for (const key of listed.keys) {
+      await c.env.KV.delete(key.name).catch(() => undefined);
+      kvCleared += 1;
+    }
+  } catch {
+    // KV unavailable (e.g. quota exhausted) — memory reset still applied.
+  }
+  return ok({ memory: memoryCleared, kv: kvCleared }, c.get('requestId'));
 });
 
 routes.get('/state', async (c) => {

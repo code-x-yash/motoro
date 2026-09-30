@@ -10,6 +10,31 @@ interface TicketResponse {
   expiresIn: number;
 }
 
+/**
+ * Tickets stay valid server-side for `expiresIn` seconds (they are only
+ * deleted once expired), so they are cached per room here. Without this,
+ * every reconnect and route remount minted a new ticket — a KV `put` each,
+ * and Workers KV free tier only allows 1,000 puts/day.
+ */
+const ticketCache = new Map<string, TicketResponse & { expiresAt: number }>();
+const ticketInflight = new Map<string, Promise<TicketResponse>>();
+
+async function getTicket(room: string): Promise<TicketResponse> {
+  const pending = ticketInflight.get(room);
+  if (pending) return pending;
+  const request = apiGet<TicketResponse>('/api/realtime/ticket', { query: { room } })
+    .then((ticket) => {
+      const ttlMs = Math.max(0, (ticket.expiresIn || 120) * 1000 - 10_000);
+      ticketCache.set(room, { ...ticket, expiresAt: Date.now() + ttlMs });
+      return ticket;
+    })
+    .finally(() => {
+      ticketInflight.delete(room);
+    });
+  ticketInflight.set(room, request);
+  return request;
+}
+
 export interface RealtimeState {
   connected: boolean;
   send: (message: { type: string; payload?: Record<string, unknown> }) => void;
@@ -60,7 +85,15 @@ export function useRealtime(
     const connect = async () => {
       if (disposed || closedRef.current) return;
       try {
-        const ticket = await apiGet<TicketResponse>('/api/realtime/ticket', { query: { room } });
+        const cached = ticketCache.get(room);
+        let usedCache = false;
+        let ticket: TicketResponse;
+        if (cached && cached.expiresAt > Date.now()) {
+          ticket = cached;
+          usedCache = true;
+        } else {
+          ticket = await getTicket(room);
+        }
         if (disposed || closedRef.current) return;
         // Prefer the server-proxied connectUrl: behind the Vercel /api/* proxy
         // the socket must go straight to the Worker origin (Vercel rewrites do
@@ -71,9 +104,11 @@ export function useRealtime(
           `${proto}://${window.location.host}/api/realtime/connect?ticket=${encodeURIComponent(ticket.ticket)}`;
         const socket = new WebSocket(url);
         socketRef.current = socket;
+        let everOpened = false;
 
         socket.addEventListener('open', () => {
           if (disposed) return;
+          everOpened = true;
           retryRef.current = 0;
           setConnected(true);
           socket.send(JSON.stringify({ type: 'subscribe' }));
@@ -95,6 +130,9 @@ export function useRealtime(
           if (pingTimer) clearInterval(pingTimer);
           setConnected(false);
           if (disposed || closedRef.current) return;
+          // A cached ticket that never connected is likely dead — drop it so
+          // the retry fetches a fresh one instead of looping on a bad ticket.
+          if (usedCache && !everOpened) ticketCache.delete(room);
           retryRef.current = Math.min(retryRef.current + 1, 6);
           retryTimer = setTimeout(() => void connect(), 1000 * retryRef.current);
         });

@@ -91,9 +91,9 @@ export async function getSessionUser(env: Env, token: string): Promise<SessionUs
     const record = cached as SessionUserRecord;
     // A partial cache entry (session only, no user) is treated as a miss.
     if (!record.session?.expiresAt || !record.user?.id) {
-      await env.KV.delete(cacheKey);
+      await env.KV.delete(cacheKey).catch(() => undefined);
     } else if (new Date(record.session.expiresAt).getTime() < Date.now()) {
-      await env.KV.delete(cacheKey);
+      await env.KV.delete(cacheKey).catch(() => undefined);
       return null;
     } else if (record.user.status !== 'ACTIVE') {
       return null;
@@ -148,7 +148,9 @@ export async function getSessionUser(env: Env, token: string): Promise<SessionUs
   };
 
   const ttl = Math.max(60, Math.floor((new Date(row.expires_at).getTime() - Date.now()) / 1000));
-  await env.KV.put(cacheKey, JSON.stringify(record), { expirationTtl: ttl });
+  // Cache write is best effort: D1 is the system of record. Never fail the
+  // request because KV is unavailable (or the free-tier put quota is spent).
+  await env.KV.put(cacheKey, JSON.stringify(record), { expirationTtl: ttl }).catch(() => undefined);
 
   // Opportunistic heartbeat (non-blocking best effort).
   void env.DB.prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?')
@@ -162,9 +164,9 @@ export async function getSessionUser(env: Env, token: string): Promise<SessionUs
 export async function destroySession(env: Env, token: string): Promise<void> {
   const tokenHash = await sha256HexAsync(token);
   await env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE token_hash = ?')
-    .bind(nowIso(), tokenHash)
+    .bind(nowIso(), token)
     .run();
-  await env.KV.delete(KV_SESSION_PREFIX + tokenHash);
+  await env.KV.delete(KV_SESSION_PREFIX + tokenHash).catch(() => undefined);
 }
 
 export async function revokeAllSessions(env: Env, userId: string, exceptTokenHash?: string): Promise<void> {
@@ -189,7 +191,7 @@ export async function revokeAllSessions(env: Env, userId: string, exceptTokenHas
       .bind(nowIso(), userId)
       .run();
   }
-  await Promise.all(rows.map((r) => env.KV.delete(KV_SESSION_PREFIX + r.token_hash)));
+  await Promise.all(rows.map((r) => env.KV.delete(KV_SESSION_PREFIX + r.token_hash).catch(() => undefined)));
 }
 
 export function buildSessionCookie(env: Env, token: string): string {

@@ -8,12 +8,17 @@ import { nowIso } from './ids';
  */
 
 const KV_PREFIX = 'cfg:';
-const TTL_SECONDS = 60;
+// Long TTL: the key is deleted on every admin save (invalidation), so TTL is
+// only a safety net. A short TTL meant one KV put per isolate per minute —
+// ~1,440 puts/day on its own, blowing the free-tier quota of 1,000/day.
+const TTL_SECONDS = 3600;
 
 type ConfigTree = Record<string, unknown>;
 
 let memoryCache: { at: number; value: unknown } | null = null;
 const MEMORY_TTL_MS = 15_000;
+/** After a failed KV invalidation, read D1 directly for a minute. */
+let d1OverrideUntil = 0;
 
 function deepMerge<T>(base: T, override: Record<string, unknown>): T {
   const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
@@ -39,11 +44,20 @@ export async function getConfig(env: Env): Promise<RuntimeConfig> {
     return memoryCache.value as RuntimeConfig;
   }
   let overrides: ConfigTree = {};
-  try {
-    const cached = await env.KV.get(KV_PREFIX + 'tree', 'json');
-    if (cached) {
-      overrides = cached as ConfigTree;
-    } else {
+  let fromKv = false;
+  if (Date.now() >= d1OverrideUntil) {
+    try {
+      const cached = await env.KV.get(KV_PREFIX + 'tree', 'json');
+      if (cached) {
+        overrides = cached as ConfigTree;
+        fromKv = true;
+      }
+    } catch {
+      // KV unavailable — fall through to D1.
+    }
+  }
+  if (!fromKv) {
+    try {
       const rows = await env.DB.prepare('SELECT key, value_json FROM platform_config').all<{
         key: string;
         value_json: string;
@@ -55,13 +69,17 @@ export async function getConfig(env: Env): Promise<RuntimeConfig> {
           /* ignore malformed rows */
         }
       }
-      await env.KV.put(KV_PREFIX + 'tree', JSON.stringify(overrides), {
-        expirationTtl: TTL_SECONDS,
-      });
+      try {
+        await env.KV.put(KV_PREFIX + 'tree', JSON.stringify(overrides), {
+          expirationTtl: TTL_SECONDS,
+        });
+      } catch {
+        // Cache write is best effort (KV quota may be spent).
+      }
+    } catch {
+      // Config must never break the request path.
+      overrides = {};
     }
-  } catch {
-    // Config must never break the request path.
-    overrides = {};
   }
   const merged = deepMerge(DEFAULT_CONFIG as unknown as ConfigTree, overrides) as unknown as RuntimeConfig;
   memoryCache = { at: Date.now(), value: merged };
@@ -103,8 +121,11 @@ export async function invalidateConfigCache(env: Env): Promise<void> {
   memoryCache = null;
   try {
     await env.KV.delete(KV_PREFIX + 'tree');
+    d1OverrideUntil = 0;
   } catch {
-    /* ignore */
+    // KV quota spent: read straight from D1 for a minute so this isolate
+    // still sees the change that was just saved.
+    d1OverrideUntil = Date.now() + 60_000;
   }
 }
 
