@@ -88,9 +88,12 @@ export default function ForgotPasswordPage() {
       await requestOtp();
     } catch (err) {
       setPhoneFields(fieldErrors(err));
-      if (err instanceof ApiError && err.code === 'SMS_NOT_CONFIGURED') {
+      if (
+        err instanceof ApiError &&
+        (err.code === 'SMS_NOT_CONFIGURED' || err.code === 'SMS_SEND_FAILED')
+      ) {
         setPhoneError(
-          "SMS codes aren't enabled on this deployment yet — switch to the Email tab to reset your password.",
+          "SMS codes aren't working on this deployment right now — switch to the Email tab to reset your password.",
         );
       } else {
         setPhoneError(errorMessage(err));

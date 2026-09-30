@@ -50,6 +50,9 @@ export async function createAuthOtp(
       logger.info(phone, 'auth_otp_sent', { purpose });
     } catch (err) {
       if (isProduction(env)) {
+        // Keep the provider's raw response in the logs — without it a 502
+        // (bad key, no device online, invalid recipient) is impossible to debug.
+        logger.error(phone, 'auth_otp_sms_failed', { purpose, error: String(err) });
         throw new AppError('SMS_SEND_FAILED', 'Could not send the verification SMS. Please try again.', 502);
       }
       logger.warn(phone, 'auth_otp_sms_failed_dev_fallback', { error: String(err) });

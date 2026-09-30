@@ -93,7 +93,10 @@ function RegisterForm() {
       setStep('verify');
     } catch (err) {
       setFields(fieldErrors(err));
-      if (err instanceof ApiError && err.code === 'SMS_NOT_CONFIGURED') {
+      if (
+        err instanceof ApiError &&
+        (err.code === 'SMS_NOT_CONFIGURED' || err.code === 'SMS_SEND_FAILED')
+      ) {
         setSmsUnavailable(true);
         setError(null);
       } else {
@@ -176,9 +179,9 @@ function RegisterForm() {
               ) : null}
               {smsUnavailable ? (
                 <Alert tone="info" className="mb-4" title="Password signup">
-                  SMS verification isn&apos;t enabled on this deployment yet. Create your
-                  account with your password below — phone codes go live once the SMS
-                  provider is connected.
+                  SMS verification isn&apos;t working on this deployment right now. Create
+                  your account with your password below — it will go back to phone codes
+                  automatically once SMS is available.
                 </Alert>
               ) : null}
               <form onSubmit={submitDetails} className="space-y-4">
