@@ -62,8 +62,13 @@ export function useRealtime(
       try {
         const ticket = await apiGet<TicketResponse>('/api/realtime/ticket', { query: { room } });
         if (disposed || closedRef.current) return;
+        // Prefer the server-proxied connectUrl: behind the Vercel /api/* proxy
+        // the socket must go straight to the Worker origin (Vercel rewrites do
+        // not forward WebSocket upgrades).
         const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-        const url = `${proto}://${window.location.host}/api/realtime/connect?ticket=${encodeURIComponent(ticket.ticket)}`;
+        const url =
+          ticket.connectUrl ||
+          `${proto}://${window.location.host}/api/realtime/connect?ticket=${encodeURIComponent(ticket.ticket)}`;
         const socket = new WebSocket(url);
         socketRef.current = socket;
 
