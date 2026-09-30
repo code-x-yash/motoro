@@ -5,7 +5,7 @@ import { logger } from './logger';
 import { recordEvent } from './events';
 import { notify } from './notify';
 import { getRequest, loadRequestDto, setRequestStatus, type RequestRow } from './requests';
-import { getPaymentProvider } from './payments';
+import { getPaymentProvider, buildUpiUrl } from './payments';
 import { applyCoupon, redeemCoupon } from './coupons';
 import { computeMechanicPayout, computeServiceFee } from './pricing';
 import { getConfig } from './config';
@@ -82,11 +82,52 @@ export interface CreatePaymentOptions {
 }
 
 export interface CheckoutPayload {
-  key: string;
-  orderId: string;
+  /** Absent = razorpay (legacy shape kept for older clients). */
+  kind?: 'razorpay' | 'upi';
+  // Razorpay hosted checkout
+  key?: string;
+  orderId?: string;
+  currency?: string;
+  name?: string;
+  // Direct UPI intent
+  upiUrl?: string;
+  vpa?: string;
+  payeeName?: string;
   amountCents: number;
-  currency: string;
-  name: string;
+}
+
+/** Builds the client checkout payload for the configured provider, if any. */
+export function buildCheckout(
+  env: Env,
+  providerName: string,
+  providerRef: string | null,
+  amountCents: number,
+  requestId: string,
+): CheckoutPayload | null {
+  if (!providerRef) return null;
+  if (providerName === 'razorpay' && env.PAYMENT_PROVIDER_KEY) {
+    return {
+      kind: 'razorpay',
+      key: env.PAYMENT_PROVIDER_KEY,
+      orderId: providerRef,
+      amountCents,
+      currency: 'INR',
+      name: 'Motoro',
+    };
+  }
+  if (providerName === 'upi') {
+    const vpa = env.PAYMENT_UPI_VPA?.trim();
+    if (!vpa) return null;
+    const payeeName = env.PAYMENT_UPI_NAME?.trim() || 'Motoro';
+    return {
+      kind: 'upi',
+      amountCents,
+      vpa,
+      payeeName,
+      upiUrl: buildUpiUrl({ vpa, payeeName, amountCents, reference: requestId }),
+    };
+  }
+  return null;
 }
 
 export async function createPayment(
@@ -130,14 +171,8 @@ export async function createPayment(
       amountCents: inFlight.amount_cents,
       provider: inFlight.provider,
       checkout:
-        inFlight.provider === 'razorpay' && inFlight.provider_ref && env.PAYMENT_PROVIDER_KEY
-          ? {
-              key: env.PAYMENT_PROVIDER_KEY,
-              orderId: inFlight.provider_ref,
-              amountCents: inFlight.amount_cents,
-              currency: 'INR',
-              name: 'Motoro',
-            }
+        inFlight.status === 'PENDING'
+          ? buildCheckout(env, inFlight.provider, inFlight.provider_ref, inFlight.amount_cents, fresh.id)
           : null,
     };
   }
@@ -244,14 +279,8 @@ export async function createPayment(
   });
 
   const checkout: CheckoutPayload | null =
-    !isCash && status !== 'PAID' && provider!.name === 'razorpay' && env.PAYMENT_PROVIDER_KEY
-      ? {
-          key: env.PAYMENT_PROVIDER_KEY,
-          orderId: providerRef,
-          amountCents: totalCents,
-          currency: 'INR',
-          name: 'Motoro',
-        }
+    !isCash && status !== 'PAID'
+      ? buildCheckout(env, provider!.name, providerRef, totalCents, fresh.id)
       : null;
 
   return {

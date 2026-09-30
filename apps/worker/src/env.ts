@@ -18,6 +18,9 @@ export interface Env {
   PAYMENT_PROVIDER_KEY?: string;
   PAYMENT_PROVIDER_SECRET?: string;
   PAYMENT_WEBHOOK_SECRET?: string;
+  /** UPI payee VPA for the free direct-to-account provider (e.g. name@okaxis). */
+  PAYMENT_UPI_VPA?: string;
+  PAYMENT_UPI_NAME?: string;
   R2_ACCESS_KEY_ID?: string;
   R2_SECRET_ACCESS_KEY?: string;
   R2_BUCKET_NAME?: string;
@@ -27,8 +30,10 @@ export interface Env {
   EMAIL_PROVIDER?: string;
   EMAIL_PROVIDER_KEY?: string;
   EMAIL_FROM?: string;
-  SMS_PROVIDER_KEY?: string;
-  SMS_FROM?: string;
+  // SMS via textbee (own Android phone as gateway). API key from the textbee
+  // dashboard; SMS_API_URL overrides the endpoint (self-hosted textbee).
+  SMS_API_KEY?: string;
+  SMS_API_URL?: string;
   WHATSAPP_PROVIDER_KEY?: string;
   WHATSAPP_PHONE_ID?: string;
   // Geocoding (default nominatim/OSM; set GEOCODER_PROVIDER=none to disable)

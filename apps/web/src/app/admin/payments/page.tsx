@@ -30,6 +30,8 @@ interface AdminPayment {
   reference: string;
   driverName: string;
   provider: string;
+  providerRef?: string | null;
+  providerPaymentId?: string | null;
   status: string;
   amountCents: number;
   method: string | null;
@@ -132,6 +134,20 @@ function AdminPayments() {
           ? `Refund of ${formatINR(body.amountCents ?? 0)} issued for ${refundTarget.reference} (partial).`
           : `Refund of ${formatINR(refundTarget.amountCents)} issued for ${refundTarget.reference}.`,
       );
+      await load();
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const settlePayment = async (payment: AdminPayment) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await apiPost(`/api/admin/payments/${payment.id}/settle`, {});
+      setNotice(`Marked ${formatINR(payment.amountCents)} as received for ${payment.reference}.`);
       await load();
     } catch (err) {
       setError(errorMessage(err));
@@ -266,6 +282,12 @@ function AdminPayments() {
                     {payment.couponCode ? (
                       <div className="mt-0.5 text-xs text-slate-500">Coupon {payment.couponCode}</div>
                     ) : null}
+                    {payment.status === 'PENDING' &&
+                    (payment.providerPaymentId ?? payment.providerRef) ? (
+                      <div className="mt-0.5 font-mono text-xs text-slate-500">
+                        {payment.providerPaymentId ? `ref ${payment.providerPaymentId}` : payment.providerRef}
+                      </div>
+                    ) : null}
                   </Td>
                   <Td className="font-semibold tabular-nums">{formatINR(payment.amountCents)}</Td>
                   <Td>
@@ -284,22 +306,40 @@ function AdminPayments() {
                     ) : null}
                   </Td>
                   <Td className="text-right">
-                    {payment.status === 'PAID' && (payment.refundedCents ?? 0) < payment.amountCents ? (
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        disabled={busy}
-                        onClick={() => {
-                          setRefundTarget(payment);
-                          setRefundReason('');
-                          setRefundAmount('');
-                        }}
-                      >
-                        Refund
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-slate-400">—</span>
-                    )}
+                    <div className="flex justify-end gap-2">
+                      {payment.status === 'PENDING' && payment.provider === 'upi' ? (
+                        <Button
+                          size="sm"
+                          variant="success"
+                          disabled={busy}
+                          onClick={() => void settlePayment(payment)}
+                        >
+                          Mark received
+                        </Button>
+                      ) : null}
+                      {payment.status === 'PAID' &&
+                      payment.provider !== 'upi' &&
+                      (payment.refundedCents ?? 0) < payment.amountCents ? (
+                        <Button
+                          size="sm"
+                          variant="danger"
+                          disabled={busy}
+                          onClick={() => {
+                            setRefundTarget(payment);
+                            setRefundReason('');
+                            setRefundAmount('');
+                          }}
+                        >
+                          Refund
+                        </Button>
+                      ) : payment.provider === 'upi' ? (
+                        <span className="text-xs text-slate-400" title="UPI refunds are sent from your bank/UPI app">
+                          —
+                        </span>
+                      ) : (
+                        <span className="text-xs text-slate-400">—</span>
+                      )}
+                    </div>
                   </Td>
                 </Tr>
               ))}

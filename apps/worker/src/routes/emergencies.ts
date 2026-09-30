@@ -770,6 +770,68 @@ routes.post('/:id/payment/verify', async (c) => {
   );
 });
 
+/**
+ * Customer claims a direct-UPI payment was made (optional UPI reference).
+ * The payment stays PENDING until ops settles it from the admin console
+ * after verifying the bank credit.
+ */
+routes.post('/:id/payment/confirm', async (c) => {
+  const user = await requireUser(c);
+  const request = await requireRequest(c.env, c.req.param('id'));
+  assertRequestAccess(user, request);
+  if (request.driver_user_id !== user.id && user.role !== 'ADMIN') {
+    throw errors.forbidden('Only the requesting driver can confirm this payment.');
+  }
+  await enforceRateLimit(c.env, 'payment_confirm', user.id, 10, 300, 'Too many confirmation attempts.');
+
+  const body = (await c.req.json().catch(() => ({}))) as { utr?: string };
+  const utr = body.utr?.trim().slice(0, 40) || null;
+  if (utr && !/^[A-Za-z0-9-]{6,40}$/.test(utr)) {
+    throw errors.validation('Enter a valid UPI reference (6-40 letters/digits).');
+  }
+
+  const payment = await c.env.DB.prepare(
+    `SELECT id, status, amount_cents FROM payments
+     WHERE request_id = ? AND status = 'PENDING' ORDER BY created_at DESC LIMIT 1`,
+  )
+    .bind(request.id)
+    .first<{ id: string; status: string; amount_cents: number }>();
+  if (!payment) {
+    throw errors.conflict('NO_PENDING_PAYMENT', 'There is no pending online payment for this request.');
+  }
+  if (utr) {
+    await c.env.DB.prepare(
+      'UPDATE payments SET provider_payment_id = ?, updated_at = ? WHERE id = ? AND provider_payment_id IS NULL',
+    ).bind(utr, nowIso(), payment.id).run();
+  }
+
+  const reviewers = await c.env.DB.prepare(
+    `SELECT id FROM users WHERE role IN ('ADMIN', 'OPERATIONS') AND status = 'ACTIVE' AND deleted_at IS NULL`,
+  ).all<{ id: string }>();
+  const amount = Math.round(payment.amount_cents / 100);
+  for (const reviewer of reviewers.results) {
+    await notify(c.env, {
+      userId: reviewer.id,
+      type: 'PAYMENT_TO_CONFIRM',
+      title: 'UPI payment to confirm',
+      body: `₹${amount} claimed for ${request.reference}${utr ? ` (ref ${utr})` : ''} — verify the bank credit and settle.`,
+      data: { requestId: request.id, paymentId: payment.id, utr },
+      requestId: request.id,
+    }).catch(() => undefined);
+  }
+
+  await recordEvent(c.env, {
+    requestId: request.id,
+    type: 'PAYMENT_CLAIMED',
+    message: `Customer confirmed UPI payment of ₹${amount}${utr ? ` (ref ${utr})` : ''}`,
+    actorRole: user.role,
+    actorUserId: user.id,
+    data: { paymentId: payment.id, utr },
+  });
+
+  return ok({ confirmed: true, status: payment.status }, c.get('requestId'));
+});
+
 routes.get('/:id/invoice', async (c) => {
   const user = await requireUser(c);
   const request = await requireRequest(c.env, c.req.param('id'));

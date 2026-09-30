@@ -170,8 +170,69 @@ export class RazorpayProvider implements PaymentProvider {
   }
 }
 
+/**
+ * Free direct-to-account UPI provider: no aggregator, no fees, no KYC.
+ * `createPayment` returns a pre-filled `upi://pay` intent; money lands
+ * directly in the configured VPA. Confirmation is manual — the customer
+ * claims payment (with optional UPI reference) and ops settles from the
+ * admin console after checking the bank credit.
+ */
+export class UpiPaymentProvider implements PaymentProvider {
+  readonly name = 'upi';
+  private vpa: string;
+  private payeeName: string;
+
+  constructor(vpa: string, payeeName: string) {
+    this.vpa = vpa;
+    this.payeeName = payeeName;
+  }
+
+  async createPayment(input: CreatePaymentInput): Promise<CreatePaymentResult> {
+    return {
+      providerRef: `upi_${newId().slice(0, 12)}`,
+      status: 'PENDING',
+      redirectUrl: buildUpiUrl({
+        vpa: this.vpa,
+        payeeName: this.payeeName,
+        amountCents: input.amountCents,
+        reference: input.requestId,
+      }),
+    };
+  }
+}
+
+/** Pre-filled UPI deep link (works in any UPI app: GPay, PhonePe, Paytm, BHIM). */
+export function buildUpiUrl(opts: {
+  vpa: string;
+  payeeName: string;
+  amountCents: number;
+  reference: string;
+}): string {
+  const params = new URLSearchParams({
+    pa: opts.vpa,
+    pn: opts.payeeName,
+    am: (opts.amountCents / 100).toFixed(2),
+    cu: 'INR',
+    tn: `Motoro ${opts.reference}`.slice(0, 40),
+  });
+  return `upi://pay?${params.toString()}`;
+}
+
 export function getPaymentProvider(env: Env): PaymentProvider {
   const provider = (env.PAYMENT_PROVIDER || 'test').toLowerCase();
+
+  if (provider === 'upi') {
+    const vpa = env.PAYMENT_UPI_VPA?.trim();
+    if (!vpa) {
+      throw new AppError(
+        'PAYMENT_NOT_CONFIGURED',
+        'Card/UPI payments are not configured on this deployment. Pay by cash, or ask support to enable the payment gateway.',
+        503,
+        { provider: 'upi' },
+      );
+    }
+    return new UpiPaymentProvider(vpa, env.PAYMENT_UPI_NAME?.trim() || 'Motoro');
+  }
 
   if (provider === 'razorpay') {
     if (env.PAYMENT_PROVIDER_KEY && env.PAYMENT_PROVIDER_SECRET) {

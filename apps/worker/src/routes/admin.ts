@@ -21,6 +21,7 @@ import { setMechanicStatus } from '../lib/mechanics';
 import { notify } from '../lib/notify';
 import { recordEvent } from '../lib/events';
 import { getPaymentProvider } from '../lib/payments';
+import { settlePaymentFromProvider } from '../lib/payment-service';
 import { computeMechanicPayout } from '../lib/pricing';
 import { SKILL_CATALOG, EQUIPMENT_CATALOG } from '@rr/config';
 import { presignDownload } from '../lib/r2';
@@ -845,6 +846,7 @@ routes.get('/payments', async (c) => {
     driver_name: string;
     provider: string;
     provider_ref: string | null;
+    provider_payment_id: string | null;
     status: string;
     amount_cents: number;
     method: string | null;
@@ -864,6 +866,7 @@ routes.get('/payments', async (c) => {
         driverName: r.driver_name,
         provider: r.provider,
         providerRef: r.provider_ref,
+        providerPaymentId: r.provider_payment_id,
         status: r.status,
         amountCents: r.amount_cents,
         method: r.method,
@@ -880,6 +883,58 @@ routes.get('/payments', async (c) => {
 });
 
 /** Refund a settled payment — full amount by default, or a partial amount. */
+/**
+ * Marks a claimed direct-UPI payment as received after the admin has seen
+ * the credit land in the bank/UPI app. Idempotent via settlePaymentFromProvider.
+ */
+routes.post('/payments/:id/settle', async (c) => {
+  const admin = await requireUser(c);
+  await enforceRateLimit(c.env, 'admin-money', admin.id, 20, 300, 'Too many settle attempts. Please wait.');
+  const payment = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?')
+    .bind(c.req.param('id'))
+    .first<{
+      id: string;
+      request_id: string;
+      provider: string;
+      provider_ref: string | null;
+      status: string;
+      amount_cents: number;
+    }>();
+  if (!payment) throw errors.notFound('Payment not found.');
+  if (payment.status === 'PAID') return ok({ payment, alreadySettled: true }, c.get('requestId'));
+  if (payment.status !== 'PENDING') {
+    throw errors.conflict('PAYMENT_NOT_PENDING', 'Only pending payments can be settled.');
+  }
+  if (payment.provider !== 'upi') {
+    throw errors.conflict('SETTLE_UNSUPPORTED', 'Only direct-UPI payments are settled manually.');
+  }
+  if (!payment.provider_ref) throw errors.conflict('NO_PROVIDER_REF', 'Payment has no provider reference.');
+
+  const settled = await settlePaymentFromProvider(c.env, payment.provider_ref);
+  if (!settled) {
+    const latest = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?')
+      .bind(payment.id)
+      .first<Record<string, unknown>>();
+    if (latest?.status === 'PAID') return ok({ payment: latest, alreadySettled: true }, c.get('requestId'));
+    throw errors.conflict('SETTLE_FAILED', 'Payment could not be settled. Please retry.');
+  }
+
+  await audit(c.env, {
+    actorUserId: admin.id,
+    actorRole: 'ADMIN',
+    action: 'PAYMENT_SETTLED',
+    entityType: 'payment',
+    entityId: payment.id,
+    data: { requestId: payment.request_id, amountCents: payment.amount_cents, provider: payment.provider },
+    requestId: c.get('requestId'),
+  });
+
+  const fresh = await c.env.DB.prepare('SELECT * FROM payments WHERE id = ?')
+    .bind(payment.id)
+    .first<Record<string, unknown>>();
+  return ok({ payment: fresh, settled: true }, c.get('requestId'));
+});
+
 routes.post('/payments/:id/refund', async (c) => {
   const admin = await requireUser(c);
   await enforceRateLimit(c.env, 'admin-money', admin.id, 10, 300, 'Too many refund attempts. Please wait.');

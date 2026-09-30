@@ -26,7 +26,7 @@ function emailConfigured(env: Env): boolean {
 }
 
 function smsConfigured(env: Env): boolean {
-  return Boolean(env.SMS_PROVIDER_KEY?.trim() && env.SMS_FROM?.trim());
+  return Boolean(env.SMS_API_KEY?.trim());
 }
 
 function whatsappConfigured(env: Env): boolean {
@@ -62,25 +62,22 @@ export async function sendEmail(
   }
 }
 
+/**
+ * textbee.dev — the sender's own Android phone + SIM is the gateway.
+ * Free tier: 300 messages/month, 50/day. Key comes from the textbee dashboard.
+ */
 export async function sendSms(env: Env, target: { to: string; body: string }): Promise<void> {
-  const raw = env.SMS_PROVIDER_KEY!.trim();
-  const separator = raw.indexOf(':');
-  if (separator <= 0) throw new Error('SMS_PROVIDER_KEY must be "ACCOUNT_SID:AUTH_TOKEN".');
-  const accountSid = raw.slice(0, separator);
-  const authToken = raw.slice(separator + 1);
-  const endpoint = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`;
-
-  const res = await fetch(endpoint, {
+  const base = (env.SMS_API_URL?.trim() || 'https://api.textbee.dev/api/v1').replace(/\/$/, '');
+  const res = await fetch(`${base}/gateway/send-sms`, {
     method: 'POST',
     headers: {
-      authorization: `Basic ${btoa(`${accountSid}:${authToken}`)}`,
-      'content-type': 'application/x-www-form-urlencoded',
+      'x-api-key': env.SMS_API_KEY!.trim(),
+      'content-type': 'application/json',
     },
-    body: new URLSearchParams({
-      From: env.SMS_FROM!.trim(),
-      To: target.to,
-      Body: target.body,
-    }).toString(),
+    body: JSON.stringify({
+      recipients: [target.to],
+      message: target.body,
+    }),
   });
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 300);

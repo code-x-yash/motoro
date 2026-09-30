@@ -29,6 +29,7 @@ interface AuthContextValue {
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<UserDto>;
   register: (input: RegisterInput) => Promise<UserDto>;
+  registerWithOtp: (input: { phone: string; otp: string; password: string }) => Promise<UserDto>;
   logout: () => Promise<void>;
   homePath: string;
 }
@@ -95,6 +96,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return data.user;
   }, []);
 
+  const registerWithOtp = useCallback(async (input: { phone: string; otp: string; password: string }) => {
+    const data = await apiPost<SessionPayload>('/api/auth/signup/verify-otp', input);
+    setUser(data.user);
+    setProfile(data.profile);
+    return data.user;
+  }, []);
+
   const logout = useCallback(async () => {
     try {
       await apiPost('/api/auth/logout');
@@ -112,10 +120,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       refresh,
       login,
       register,
+      registerWithOtp,
       logout,
       homePath: homePathFor(user?.role),
     }),
-    [user, profile, loading, refresh, login, register, logout],
+    [user, profile, loading, refresh, login, register, registerWithOtp, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

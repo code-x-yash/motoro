@@ -11,12 +11,18 @@ import { audit } from '../lib/audit';
 import { logger } from '../lib/logger';
 import { getUserNotificationPrefs } from '../lib/notify';
 import {
+  forgotPasswordPhoneSchema,
   forgotPasswordSchema,
   loginSchema,
+  normalizePhoneE164,
   registerSchema,
+  resetPasswordOtpSchema,
   resetPasswordSchema,
+  signupOtpRequestSchema,
+  verifySignupOtpSchema,
 } from '@rr/validation';
 import { loadSessionUser } from '../lib/user-dto';
+import { createAuthOtp, verifyAuthOtp } from '../lib/auth-otp';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -26,6 +32,7 @@ routes.post('/register', async (c) => {
   await enforceRateLimit(c.env, 'register', ip, 10, 300, 'Too many registration attempts. Please try again later.');
 
   const input = parseInput(registerSchema, await c.req.json().catch(() => ({})));
+  if (input.phone) input.phone = normalizePhoneE164(input.phone);
 
   const existing = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL')
     .bind(input.email)
@@ -34,13 +41,15 @@ routes.post('/register', async (c) => {
     throw errors.conflict('EMAIL_TAKEN', 'An account with this email already exists.');
   }
   if (input.phone) {
+    // Same number may exist in other roles — only a duplicate role is blocked
+    // (mirrors the users_phone_role_unique index).
     const existingPhone = await c.env.DB.prepare(
-      'SELECT id FROM users WHERE phone = ? AND deleted_at IS NULL',
+      'SELECT id FROM users WHERE phone = ? AND role = ? AND deleted_at IS NULL',
     )
-      .bind(input.phone)
+      .bind(input.phone, input.role)
       .first<{ id: string }>();
     if (existingPhone) {
-      throw errors.conflict('PHONE_TAKEN', 'An account with this phone number already exists.');
+      throw errors.conflict('PHONE_TAKEN', 'This phone number already has an account for that role.');
     }
   }
 
@@ -173,6 +182,125 @@ function profileInserts(
   return stmts;
 }
 
+/**
+ * Signup with mobile OTP — step 1. Validates details and uniqueness, stores
+ * nothing; the account is only created after the SMS code verifies.
+ */
+routes.post('/signup/otp', async (c) => {
+  const requestId = c.get('requestId');
+  const ip = c.req.header('cf-connecting-ip') ?? 'local';
+  await enforceRateLimit(c.env, 'otp_send_ip', ip, 20, 3600, 'Too many verification requests. Please try again later.');
+
+  const input = parseInput(signupOtpRequestSchema, await c.req.json().catch(() => ({})));
+  const phone = normalizePhoneE164(input.phone);
+  await enforceRateLimit(c.env, 'otp_send', phone, 5, 3600, 'Too many codes sent to this number. Please try again later.');
+
+  const existingEmail = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL')
+    .bind(input.email)
+    .first<{ id: string }>();
+  if (existingEmail) {
+    throw errors.conflict('EMAIL_TAKEN', 'An account with this email already exists.');
+  }
+  const existingPhone = await c.env.DB.prepare(
+    'SELECT id FROM users WHERE phone = ? AND role = ? AND deleted_at IS NULL',
+  )
+    .bind(phone, input.role)
+    .first<{ id: string }>();
+  if (existingPhone) {
+    throw errors.conflict('PHONE_TAKEN', 'This phone number already has an account for that role.');
+  }
+
+  const otp = await createAuthOtp(c.env, 'SIGNUP', phone, {
+    fullName: input.fullName,
+    email: input.email,
+    role: input.role,
+    locale: input.locale,
+  });
+
+  logger.info(requestId, 'signup_otp_requested', { phone, role: input.role });
+  return ok(
+    {
+      phone,
+      message: 'Verification code sent to your phone.',
+      devOtp: otp.devOtp,
+    },
+    requestId,
+  );
+});
+
+/** Signup with mobile OTP — step 2: code + password create the account. */
+routes.post('/signup/verify-otp', async (c) => {
+  const requestId = c.get('requestId');
+  const ip = c.req.header('cf-connecting-ip') ?? 'local';
+  const input = parseInput(verifySignupOtpSchema, await c.req.json().catch(() => ({})));
+  const phone = normalizePhoneE164(input.phone);
+  await enforceRateLimit(c.env, 'otp_verify', `${ip}:${phone}`, 20, 3600);
+
+  const verified = await verifyAuthOtp(c.env, 'SIGNUP', phone, input.otp);
+  const meta = verified.meta ?? {};
+  const fullName = String(meta.fullName ?? '').trim();
+  const email = String(meta.email ?? '').trim();
+  const role = String(meta.role ?? 'DRIVER');
+  const locale = String(meta.locale ?? 'en');
+  if (!fullName || !email) {
+    throw errors.validation('The signup session expired. Please start again.');
+  }
+
+  const existingEmail = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL')
+    .bind(email)
+    .first<{ id: string }>();
+  if (existingEmail) {
+    throw errors.conflict('EMAIL_TAKEN', 'An account with this email already exists.');
+  }
+
+  const userId = newId();
+  const passwordHash = await hashPassword(input.password);
+  const now = nowIso();
+
+  try {
+    await c.env.DB.batch([
+      c.env.DB.prepare(
+        `INSERT INTO users (id, role, email, phone, password_hash, full_name, locale, status, phone_verified_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', ?, ?, ?)`,
+      ).bind(userId, role, email, phone, passwordHash, fullName, locale, now, now, now),
+      ...profileInserts(c.env, { role }, userId, now),
+    ]);
+  } catch (err) {
+    const message = String(err);
+    if (message.includes('users_phone_role_unique')) {
+      throw errors.conflict('PHONE_TAKEN', 'This phone number already has an account for that role.');
+    }
+    if (message.includes('UNIQUE') && message.includes('email')) {
+      throw errors.conflict('EMAIL_TAKEN', 'An account with this email already exists.');
+    }
+    throw err;
+  }
+
+  const session = await createSession(c.env, userId, {
+    userAgent: c.req.header('user-agent'),
+    ip,
+  });
+
+  await audit(c.env, {
+    actorUserId: userId,
+    actorRole: role,
+    action: 'USER_REGISTERED',
+    entityType: 'user',
+    entityId: userId,
+    data: { role, phoneVerified: true, method: 'SMS_OTP' },
+    ip,
+    requestId,
+  });
+
+  const user = await loadSessionUser(c.env, userId);
+  return ok(
+    { user: user.user, profile: user.profile },
+    requestId,
+    201,
+    { 'Set-Cookie': buildSessionCookie(c.env, session.token) },
+  );
+});
+
 routes.post('/login', async (c) => {
   const requestId = c.get('requestId');
   const ip = c.req.header('cf-connecting-ip') ?? 'local';
@@ -253,7 +381,39 @@ routes.post('/forgot-password', async (c) => {
   const requestId = c.get('requestId');
   const ip = c.req.header('cf-connecting-ip') ?? 'local';
   await enforceRateLimit(c.env, 'forgot', ip, 5, 300);
-  const input = parseInput(forgotPasswordSchema, await c.req.json().catch(() => ({})));
+
+  const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Mobile OTP branch: { phone } instead of { email }.
+  if (body && typeof body.phone === 'string' && body.phone.trim()) {
+    const input = parseInput(forgotPasswordPhoneSchema, body);
+    const phone = normalizePhoneE164(input.phone);
+    await enforceRateLimit(c.env, 'forgot_phone', phone, 5, 3600);
+
+    const user = await c.env.DB.prepare(
+      'SELECT id FROM users WHERE phone = ? AND deleted_at IS NULL LIMIT 1',
+    )
+      .bind(phone)
+      .first<{ id: string }>();
+
+    let devOtp: string | undefined;
+    if (user) {
+      const otp = await createAuthOtp(c.env, 'RESET', phone);
+      devOtp = otp.devOtp;
+      logger.info(requestId, 'password_reset_otp_requested', { userId: user.id });
+    }
+
+    // Same generic response whether or not the number exists (no enumeration).
+    return ok(
+      {
+        message: 'If that number exists, a verification code has been sent.',
+        devOtp,
+      },
+      requestId,
+    );
+  }
+
+  const input = parseInput(forgotPasswordSchema, body);
 
   const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL')
     .bind(input.email)
@@ -341,6 +501,66 @@ routes.post('/reset-password', async (c) => {
   });
 
   return ok({ reset: true, message: 'Password updated. Please sign in again.' }, requestId, 200, { 'Set-Cookie': clearSessionCookie(c.env) });
+});
+
+/** Password reset with a mobile OTP — no email or link needed. */
+routes.post('/reset-password/otp', async (c) => {
+  const requestId = c.get('requestId');
+  const ip = c.req.header('cf-connecting-ip') ?? 'local';
+  await enforceRateLimit(c.env, 'reset', ip, 10, 300);
+
+  const input = parseInput(resetPasswordOtpSchema, await c.req.json().catch(() => ({})));
+  const phone = normalizePhoneE164(input.phone);
+  await enforceRateLimit(c.env, 'reset_phone', phone, 10, 300);
+
+  await verifyAuthOtp(c.env, 'RESET', phone, input.otp);
+
+  const candidates = Array.from(new Set([phone, phone.replace(/^\+/, '')]));
+  const matches = await c.env.DB.prepare(
+    `SELECT id, email FROM users WHERE phone IN (${candidates.map(() => '?').join(', ')}) AND deleted_at IS NULL`,
+  )
+    .bind(...candidates)
+    .all<{ id: string; email: string }>();
+
+  let targets = matches.results;
+  if (input.email) {
+    targets = targets.filter((row) => row.email === input.email);
+    if (targets.length === 0) throw errors.validation('No account matches that number and email.');
+  } else if (targets.length === 0) {
+    throw errors.validation('No account is linked to this phone number.');
+  } else if (targets.length > 1) {
+    throw errors.validation(
+      'Multiple accounts use this number. Add the email address of the account to reset.',
+    );
+  }
+  const target = targets[0]!;
+
+  const passwordHash = await hashPassword(input.password);
+  await c.env.DB.batch([
+    c.env.DB.prepare('UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?').bind(
+      passwordHash,
+      nowIso(),
+      target.id,
+    ),
+    c.env.DB.prepare('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL').bind(
+      nowIso(),
+      target.id,
+    ),
+  ]);
+
+  await audit(c.env, {
+    actorUserId: target.id,
+    action: 'PASSWORD_RESET',
+    entityType: 'user',
+    entityId: target.id,
+    data: { method: 'SMS_OTP' },
+    ip,
+    requestId,
+  });
+
+  return ok({ reset: true, message: 'Password updated. Please sign in again.' }, requestId, 200, {
+    'Set-Cookie': clearSessionCookie(c.env),
+  });
 });
 
 export default routes;

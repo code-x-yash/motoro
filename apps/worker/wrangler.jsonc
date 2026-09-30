@@ -1,4 +1,4 @@
-{
+﻿{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "motoro-api",
   "main": "src/index.ts",
@@ -92,7 +92,7 @@
         "ALLOWED_ORIGINS": "https://staging.motoro.example,http://localhost:3000",
         "PAYMENT_PROVIDER": "test",
         "SESSION_COOKIE_NAME": "rr_session",
-        // Never commit a real secret here — set it per environment:
+        // Never commit a real secret here â€” set it per environment:
         //   npx wrangler secret put SESSION_SECRET --env staging
         "SESSION_SECRET": ""
       },
@@ -152,7 +152,9 @@
         "ENVIRONMENT": "production",
         "ENABLE_SEED_ROUTES": "false",
         "ALLOWED_ORIGINS": "https://motoro-api.motoro.workers.dev,https://motoro-web.vercel.app",
-        "PAYMENT_PROVIDER": "razorpay",
+        "PAYMENT_PROVIDER": "upi",
+        "PAYMENT_UPI_VPA": "",
+        "PAYMENT_UPI_NAME": "Motoro",
         "SESSION_COOKIE_NAME": "rr_session",
         // Set per environment: npx wrangler secret put SESSION_SECRET
         "SESSION_SECRET": ""
@@ -209,3 +211,4 @@
     }
   }
 }
+

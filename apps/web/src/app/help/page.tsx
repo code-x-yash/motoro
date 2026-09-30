@@ -8,9 +8,7 @@ import {
   ChevronDown,
   Clock3,
   CreditCard,
-  Lock,
   Mail,
-  MapPin,
   Navigation,
   Phone,
   Radio,
@@ -21,13 +19,6 @@ import {
 } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { useAuth } from '@/lib/auth';
-
-const DEMO_ROWS = [
-  ['Driver', 'driver1@motoro.test'],
-  ['Mechanic', 'mechanic6@motoro.test'],
-  ['Operations', 'ops1@motoro.test'],
-  ['Admin', 'admin@motoro.test'],
-];
 
 interface FaqItem {
   q: string;
@@ -270,34 +261,6 @@ export default function HelpPage() {
             <p className="mt-1 text-xs text-slate-500">Auto re-dispatch and escalation until someone arrives.</p>
           </div>
         </section>
-
-        <details className="card-bright group animate-fade-up overflow-hidden">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
-            <span className="flex items-center gap-2">
-              <Lock className="h-4 w-4 text-slate-400" />
-              Preview demo accounts
-            </span>
-            <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="border-t border-slate-100 p-5">
-            <p className="text-xs text-slate-500">Password for every seeded account: Demo@1234</p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              {DEMO_ROWS.map(([role, email]) => (
-                <div
-                  key={email}
-                  className="flex items-center justify-between gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-sm"
-                >
-                  <span className="text-slate-500">{role}</span>
-                  <span className="truncate font-medium text-slate-800">{email}</span>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex items-center gap-3 text-xs text-slate-500">
-              <MapPin className="h-4 w-4 text-brand-700" />
-              Need something else? Call or email — we reply in under 15 minutes.
-            </div>
-          </div>
-        </details>
 
         <footer className="border-t border-slate-200 pt-4 text-center text-xs text-slate-400">
           © {year} {BRAND.name} ·{' '}

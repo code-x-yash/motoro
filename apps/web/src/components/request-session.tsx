@@ -28,7 +28,7 @@ import {
   UrgencyBadge,
   cn,
 } from '@rr/ui';
-import { Check, Clock, MapPin, Navigation, Share2, ShieldAlert, XCircle } from 'lucide-react';
+import { Check, Clock, Loader2, MapPin, Navigation, Share2, ShieldAlert, XCircle } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { DEFAULT_CONFIG, formatMoney } from '@rr/config';
@@ -110,6 +110,12 @@ export function RequestSession({ requestId }: { requestId: string }) {
       createdAt: string;
     }>
   >([]);
+
+  const [upiCheckout, setUpiCheckout] = useState<CheckoutPayload | null>(null);
+  const [upiPhase, setUpiPhase] = useState<'pay' | 'wait'>('pay');
+  const [upiUtr, setUpiUtr] = useState('');
+  const [upiNote, setUpiNote] = useState<string | null>(null);
+  const [upiCopied, setUpiCopied] = useState(false);
 
   useEffect(() => {
     if (!shareOpen) return;
@@ -248,11 +254,16 @@ export function RequestSession({ requestId }: { requestId: string }) {
   };
 
   interface CheckoutPayload {
-    key: string;
-    orderId: string;
+    /** Absent = razorpay (legacy). */
+    kind?: 'razorpay' | 'upi';
+    key?: string;
+    orderId?: string;
     amountCents: number;
-    currency: string;
-    name: string;
+    currency?: string;
+    name?: string;
+    upiUrl?: string;
+    vpa?: string;
+    payeeName?: string;
   }
   interface PaymentCreateResponse {
     payment?: { status?: string; checkout?: CheckoutPayload | null };
@@ -277,6 +288,15 @@ export function RequestSession({ requestId }: { requestId: string }) {
       });
       const checkout = data.payment?.checkout;
       if (!checkout) return; // Settled instantly (test provider) or nothing to open.
+
+      if (checkout.kind === 'upi') {
+        setUpiPhase('pay');
+        setUpiUtr('');
+        setUpiNote(null);
+        setUpiCopied(false);
+        setUpiCheckout(checkout);
+        return;
+      }
 
       const loaded = await loadRazorpayScript();
       const RazorpayCtor = window.Razorpay;
@@ -314,6 +334,38 @@ export function RequestSession({ requestId }: { requestId: string }) {
       });
     });
   };
+
+  const confirmUpiPaid = async () => {
+    if (!request) return;
+    const ref = upiUtr.trim();
+    if (ref && !/^[A-Za-z0-9-]{6,40}$/.test(ref)) {
+      setActionError('Enter a valid UPI reference (6-40 letters/digits).');
+      return;
+    }
+    await run(async () => {
+      await apiPost(`/api/emergencies/${request.id}/payment/confirm`, ref ? { utr: ref } : {});
+      setUpiNote(null);
+      setUpiPhase('wait');
+    });
+  };
+
+  useEffect(() => {
+    if (upiPhase !== 'wait') return;
+    if (request?.paymentStatus === 'PAID') {
+      setUpiCheckout(null);
+      setUpiPhase('pay');
+      return;
+    }
+    const poll = window.setInterval(() => void load(), 4000);
+    const stop = window.setTimeout(
+      () => setUpiNote("Still waiting for confirmation — we'll notify you the moment it lands."),
+      32000,
+    );
+    return () => {
+      window.clearInterval(poll);
+      window.clearTimeout(stop);
+    };
+  }, [upiPhase, request?.paymentStatus, load]);
 
   const previewCoupon = async () => {
     if (!couponInput.trim() || !request) return;
@@ -883,6 +935,95 @@ export function RequestSession({ requestId }: { requestId: string }) {
           </Card>
         </div>
       </div>
+
+      <Modal
+        open={Boolean(upiCheckout)}
+        onClose={() => {
+          setUpiCheckout(null);
+          setUpiPhase('pay');
+        }}
+        title={upiPhase === 'wait' ? 'Confirming your payment' : 'Pay via UPI'}
+        footer={
+          upiPhase === 'pay' && upiCheckout ? (
+            <>
+              <Button variant="secondary" onClick={() => setUpiCheckout(null)}>
+                Cancel
+              </Button>
+              <Button variant="success" loading={busy} onClick={confirmUpiPaid}>
+                I've paid {formatINR(upiCheckout.amountCents)}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setUpiCheckout(null);
+                setUpiPhase('pay');
+              }}
+            >
+              Close
+            </Button>
+          )
+        }
+      >
+        {upiPhase === 'pay' && upiCheckout ? (
+          <div className="space-y-4">
+            <div className="rounded-2xl bg-canvas p-4 text-center">
+              <p className="text-xs uppercase tracking-wide text-ink-muted">Amount to pay</p>
+              <p className="mt-1 text-3xl font-semibold">{formatINR(upiCheckout.amountCents)}</p>
+            </div>
+            <Button
+              variant="primary"
+              fullWidth
+              onClick={() => {
+                if (upiCheckout.upiUrl) window.location.href = upiCheckout.upiUrl;
+              }}
+            >
+              Open UPI app
+            </Button>
+            {upiCheckout.vpa ? (
+              <div className="flex items-center justify-between gap-2 rounded-xl border border-border p-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-ink-muted">Or pay this VPA from any app</p>
+                  <p className="truncate font-mono text-sm font-medium">{upiCheckout.vpa}</p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    void navigator.clipboard?.writeText(upiCheckout.vpa ?? '');
+                    setUpiCopied(true);
+                    window.setTimeout(() => setUpiCopied(false), 2000);
+                  }}
+                >
+                  {upiCopied ? 'Copied' : 'Copy'}
+                </Button>
+              </div>
+            ) : null}
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-muted">
+              <li>Pay the exact amount in any UPI app.</li>
+              <li>Copy the UPI reference number from your app (optional).</li>
+              <li>Tap &ldquo;I&rsquo;ve paid&rdquo; &mdash; we&rsquo;ll confirm with our team.</li>
+            </ol>
+            <Field label="UPI reference (optional)" hint="The reference speeds up confirmation.">
+              <Input
+                value={upiUtr}
+                onChange={(event) => setUpiUtr(event.target.value)}
+                placeholder="e.g. 415023678912"
+              />
+            </Field>
+          </div>
+        ) : (
+          <div className="space-y-3 py-2 text-center">
+            <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
+            <p className="font-medium">Waiting for confirmation&hellip;</p>
+            <p className="text-sm text-ink-muted">
+              {upiNote ??
+                'Your payment was reported to our team. You will be notified as soon as it is confirmed.'}
+            </p>
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={cancelOpen}

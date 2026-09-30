@@ -91,6 +91,49 @@ export const resetPasswordSchema = z.object({
   password: passwordSchema,
 });
 
+/** OTP verification codes: 6 digits, numeric string. */
+export const otpCodeSchema = z.string().trim().regex(/^[0-9]{6}$/, 'OTP must be 6 digits');
+
+/** Step 1 of OTP signup: details only — nothing is persisted until the code verifies. */
+export const signupOtpRequestSchema = z.object({
+  fullName: z.string().trim().min(2).max(120),
+  email: emailSchema,
+  phone: phoneSchema,
+  role: z.enum(['DRIVER', 'MECHANIC', 'WORKSHOP', 'TOWING_PARTNER']),
+  locale: localeSchema.default('en'),
+});
+
+/** Step 2 of OTP signup: code + password create the account. */
+export const verifySignupOtpSchema = z.object({
+  phone: phoneSchema,
+  otp: otpCodeSchema,
+  password: passwordSchema,
+});
+
+export const forgotPasswordPhoneSchema = z.object({ phone: phoneSchema });
+
+export const resetPasswordOtpSchema = z.object({
+  phone: phoneSchema,
+  otp: otpCodeSchema,
+  password: passwordSchema,
+  /** Required only when the phone maps to accounts in more than one role. */
+  email: emailSchema.optional(),
+});
+
+/**
+ * Normalizes an Indian/ international phone number to E.164-ish form the
+ * app stores: strips spaces/dashes, defaults 10-digit local numbers to +91.
+ */
+export function normalizePhoneE164(raw: string): string {
+  const cleaned = raw.replace(/[\s\-().]/g, '');
+  if (/^\+/.test(cleaned)) return cleaned;
+  const digits = cleaned.replace(/\D/g, '');
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.length === 11 && digits.startsWith('0')) return `+91${digits.slice(1)}`;
+  if (digits.length === 12 && digits.startsWith('91')) return `+${digits}`;
+  return `+${digits}`;
+}
+
 export const updateProfileSchema = z.object({
   fullName: z.string().trim().min(2).max(120).optional(),
   phone: phoneSchema.optional(),
