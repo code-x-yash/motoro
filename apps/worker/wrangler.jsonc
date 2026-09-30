@@ -151,7 +151,7 @@
       "vars": {
         "ENVIRONMENT": "production",
         "ENABLE_SEED_ROUTES": "false",
-        "ALLOWED_ORIGINS": "https://motoro-api.motoro.workers.dev",
+        "ALLOWED_ORIGINS": "https://motoro-api.motoro.workers.dev,https://motoro-web.vercel.app",
         "PAYMENT_PROVIDER": "razorpay",
         "SESSION_COOKIE_NAME": "rr_session",
         // Set per environment: npx wrangler secret put SESSION_SECRET

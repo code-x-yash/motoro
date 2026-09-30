@@ -8,14 +8,11 @@ const isExport = process.env.NEXT_OUTPUT === 'export';
 let API_BASE_URL = (process.env.API_BASE_URL || 'http://127.0.0.1:8787').replace(/\/+$/, '');
 if (API_BASE_URL.endsWith('/api')) API_BASE_URL = API_BASE_URL.slice(0, -'/api'.length);
 
+// Vercel has no backend: proxy /api/* to the production Worker unless the
+// project explicitly sets API_BASE_URL (proxying to 127.0.0.1 is refused by
+// Vercel and answers 404).
 if (process.env.VERCEL && !process.env.API_BASE_URL) {
-  throw new Error(
-    'API_BASE_URL is not set. Every /api/* call would be proxied to http://127.0.0.1:8787, ' +
-      'which Vercel refuses (X-Vercel-Error: DNS_HOSTNAME_RESOLVED_PRIVATE) and answers 404. ' +
-      'The supported deployment is the Cloudflare Worker (`npm run deploy`), which serves the ' +
-      'frontend and the API from one origin; if you still deploy to Vercel, set API_BASE_URL ' +
-      'to a publicly reachable Worker URL.',
-  );
+  API_BASE_URL = 'https://motoro-api.motoro.workers.dev';
 }
 
 const nextConfig = {
