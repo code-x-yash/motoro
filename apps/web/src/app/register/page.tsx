@@ -7,7 +7,7 @@ import type { Role } from '@rr/types';
 import { Alert, Button, Card, CardContent, Field, Input, cn } from '@rr/ui';
 import { ArrowLeft, Car, CheckCircle2, Eye, EyeOff, MessageSquare, Truck, Warehouse, Wrench, type LucideIcon } from 'lucide-react';
 import { homePathFor, useAuth } from '@/lib/auth';
-import { apiPost, errorMessage, fieldErrors } from '@/lib/api';
+import { ApiError, apiPost, errorMessage, fieldErrors } from '@/lib/api';
 import { LandingNav } from '@/components/landing-nav';
 import { AuthLayout } from '@/components/auth-layout';
 import { OtpInput } from '@/components/otp-input';
@@ -28,7 +28,8 @@ interface SignupOtpResponse {
 function RegisterForm() {
   const router = useRouter();
   const search = useSearchParams();
-  const { registerWithOtp } = useAuth();
+  const { register, registerWithOtp } = useAuth();
+  const [smsUnavailable, setSmsUnavailable] = useState(false);
   const initialRole = search.get('role');
   const [role, setRole] = useState<Role>(
     ROLE_OPTIONS.some((option) => option.value === initialRole) ? (initialRole as Role) : 'DRIVER',
@@ -75,11 +76,29 @@ function RegisterForm() {
     setError(null);
     setFields({});
     try {
+      if (smsUnavailable) {
+        // SMS provider not connected on this deployment — fall back to the
+        // password signup path (same backend, phone stored unverified).
+        const user = await register({
+          fullName: fullName.trim(),
+          email: email.trim(),
+          phone: phone.trim(),
+          password,
+          role,
+        });
+        router.replace(homePathFor(user.role));
+        return;
+      }
       await requestOtp();
       setStep('verify');
     } catch (err) {
       setFields(fieldErrors(err));
-      setError(errorMessage(err));
+      if (err instanceof ApiError && err.code === 'SMS_NOT_CONFIGURED') {
+        setSmsUnavailable(true);
+        setError(null);
+      } else {
+        setError(errorMessage(err));
+      }
     } finally {
       setBusy(false);
     }
@@ -155,6 +174,13 @@ function RegisterForm() {
                   {error}
                 </Alert>
               ) : null}
+              {smsUnavailable ? (
+                <Alert tone="info" className="mb-4" title="Password signup">
+                  SMS verification isn&apos;t enabled on this deployment yet. Create your
+                  account with your password below — phone codes go live once the SMS
+                  provider is connected.
+                </Alert>
+              ) : null}
               <form onSubmit={submitDetails} className="space-y-4">
                 <div>
                   <span className="input-label">I am a</span>
@@ -226,7 +252,11 @@ function RegisterForm() {
                   label="Mobile number"
                   htmlFor="phone"
                   error={fields.phone}
-                  hint="We'll text a 6-digit code to verify it."
+                  hint={
+                    smsUnavailable
+                      ? 'Stored for your profile — SMS codes are not active yet.'
+                      : "We'll text a 6-digit code to verify it."
+                  }
                 >
                   <Input
                     id="phone"
@@ -264,7 +294,7 @@ function RegisterForm() {
                   </div>
                 </Field>
                 <Button type="submit" loading={busy} fullWidth>
-                  Send verification code
+                  {smsUnavailable ? 'Create account' : 'Send verification code'}
                 </Button>
               </form>
             </CardContent>

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Alert, Button, Card, CardContent, Field, Input, cn } from '@rr/ui';
 import { ArrowLeft, Mail, MessageSquare, Phone } from 'lucide-react';
-import { apiPost, errorMessage, fieldErrors } from '@/lib/api';
+import { ApiError, apiPost, errorMessage, fieldErrors } from '@/lib/api';
 import { LandingNav } from '@/components/landing-nav';
 import { AuthLayout } from '@/components/auth-layout';
 import { OtpInput } from '@/components/otp-input';
@@ -88,7 +88,13 @@ export default function ForgotPasswordPage() {
       await requestOtp();
     } catch (err) {
       setPhoneFields(fieldErrors(err));
-      setPhoneError(errorMessage(err));
+      if (err instanceof ApiError && err.code === 'SMS_NOT_CONFIGURED') {
+        setPhoneError(
+          "SMS codes aren't enabled on this deployment yet — switch to the Email tab to reset your password.",
+        );
+      } else {
+        setPhoneError(errorMessage(err));
+      }
     } finally {
       setPhoneBusy(false);
     }
