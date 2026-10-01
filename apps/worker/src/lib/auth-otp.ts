@@ -8,9 +8,10 @@ import { sendSms } from './delivery';
 
 /**
  * Signup / password-reset OTPs: code is stored only as a sha256 hash with a
- * hard TTL and attempt cap. Delivery goes through the textbee SMS gateway;
- * non-production responses may include `devOtp` so flows are testable
- * without a phone (same pattern as forgot-password's devToken).
+ * hard TTL and attempt cap. Delivery goes through the configured SMS gateway
+ * (SMS_PROVIDER: textbee or fast2sms); non-production responses may include
+ * `devOtp` so flows are testable without a phone (same pattern as
+ * forgot-password's devToken).
  */
 
 export type AuthOtpPurpose = 'SIGNUP' | 'RESET';
@@ -46,7 +47,7 @@ export async function createAuthOtp(
   const message = `Your Motoro verification code is ${code}. Valid for ${OTP_TTL_MINUTES} minutes. Never share it with anyone.`;
   if (smsConfigured(env)) {
     try {
-      await sendSms(env, { to: phone, body: message });
+      await sendSms(env, { to: phone, body: message, otp: code });
       logger.info(phone, 'auth_otp_sent', { purpose });
     } catch (err) {
       if (isProduction(env)) {

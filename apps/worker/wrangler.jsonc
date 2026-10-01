@@ -152,6 +152,8 @@
         "ENVIRONMENT": "production",
         "ENABLE_SEED_ROUTES": "false",
         "ALLOWED_ORIGINS": "https://motoro-api.motoro.workers.dev,https://motoro-web.vercel.app",
+        "SMS_PROVIDER": "fast2sms",
+        "SMS_FAST2SMS_ROUTE": "otp",
         "PAYMENT_PROVIDER": "upi",
         "PAYMENT_UPI_VPA": "9760286560@kotak",
         "PAYMENT_UPI_NAME": "Motoro",

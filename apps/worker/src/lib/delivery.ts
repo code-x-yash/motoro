@@ -63,10 +63,25 @@ export async function sendEmail(
 }
 
 /**
- * textbee.dev — the sender's own Android phone + SIM is the gateway.
- * Free tier: 300 messages/month, 50/day. Key comes from the textbee dashboard.
+ * SMS dispatch — `SMS_PROVIDER` picks the gateway:
+ *  - textbee (default): the sender's own Android phone + SIM, free-form text.
+ *  - fast2sms: India OTP route (`route=otp`, fixed "Your OTP: {code}" template,
+ *    no DLT registration). Only numeric OTP content is deliverable; free-text
+ *    (notifications) is logged and skipped because that route rejects it.
  */
-export async function sendSms(env: Env, target: { to: string; body: string }): Promise<void> {
+export async function sendSms(
+  env: Env,
+  target: { to: string; body: string; otp?: string },
+): Promise<void> {
+  const provider = (env.SMS_PROVIDER || 'textbee').trim().toLowerCase();
+  if (provider === 'fast2sms') {
+    await sendViaFast2Sms(env, target);
+    return;
+  }
+  await sendViaTextbee(env, target);
+}
+
+async function sendViaTextbee(env: Env, target: { to: string; body: string }): Promise<void> {
   const base = (env.SMS_API_URL?.trim() || 'https://api.textbee.dev/api/v1').replace(/\/$/, '');
   const res = await fetch(`${base}/gateway/send-sms`, {
     method: 'POST',
@@ -82,6 +97,47 @@ export async function sendSms(env: Env, target: { to: string; body: string }): P
   if (!res.ok) {
     const detail = (await res.text()).slice(0, 300);
     throw new Error(`sms provider responded ${res.status}: ${detail}`);
+  }
+}
+
+/** fast2SMS: POST /dev/bulkV2 (docs.fast2sms.com). Route via SMS_FAST2SMS_ROUTE. */
+async function sendViaFast2Sms(
+  env: Env,
+  target: { to: string; body: string; otp?: string },
+): Promise<void> {
+  const otp = target.otp?.trim();
+  if (!otp || !/^\d{4,10}$/.test(otp)) {
+    logger.info('sms', 'fast2sms_free_text_skipped', { to: target.to });
+    return;
+  }
+  const digits = target.to.replace(/\D/g, '');
+  const numbers = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits.replace(/^0/, '');
+  const route = (env.SMS_FAST2SMS_ROUTE || 'otp').trim().toLowerCase() === 'q' ? 'q' : 'otp';
+  const payload =
+    route === 'q'
+      ? { message: target.body, route: 'q', numbers, flash: '0' }
+      : { variables_values: otp, route: 'otp', numbers, flash: '0' };
+  const res = await fetch('https://www.fast2sms.com/dev/bulkV2', {
+    method: 'POST',
+    headers: {
+      authorization: env.SMS_API_KEY!.trim(),
+      'content-type': 'application/json',
+      accept: '*/*',
+    },
+    body: JSON.stringify(payload),
+  });
+  const detail = (await res.text()).slice(0, 300);
+  if (!res.ok) {
+    throw new Error(`sms provider responded ${res.status}: ${detail}`);
+  }
+  let parsed: { return?: boolean } | null = null;
+  try {
+    parsed = JSON.parse(detail) as { return?: boolean };
+  } catch {
+    throw new Error(`sms provider sent a malformed response: ${detail}`);
+  }
+  if (parsed?.return !== true) {
+    throw new Error(`sms provider rejected the send: ${detail}`);
   }
 }
 

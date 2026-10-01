@@ -30,8 +30,14 @@ export interface Env {
   EMAIL_PROVIDER?: string;
   EMAIL_PROVIDER_KEY?: string;
   EMAIL_FROM?: string;
-  // SMS via textbee (own Android phone as gateway). API key from the textbee
-  // dashboard; SMS_API_URL overrides the endpoint (self-hosted textbee).
+  // SMS gateway: SMS_PROVIDER picks the adapter (textbee | fast2sms).
+  // textbee: own Android phone as gateway (free); key from the textbee
+  // dashboard, SMS_API_URL overrides the endpoint (self-hosted textbee).
+  // fast2sms: India OTP route (route=otp, no DLT); key from Dev API section.
+  // SMS_FAST2SMS_ROUTE: "otp" (cheap, needs ₹100 top-up + Aadhaar KYC + website
+  // verification) or "q" (Quick SMS free-form, needs only the ₹100 top-up, ₹5/SMS).
+  SMS_PROVIDER?: string;
+  SMS_FAST2SMS_ROUTE?: string;
   SMS_API_KEY?: string;
   SMS_API_URL?: string;
   WHATSAPP_PROVIDER_KEY?: string;
