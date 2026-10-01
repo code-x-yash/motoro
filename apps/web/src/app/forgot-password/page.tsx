@@ -2,17 +2,12 @@
 
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
-import { Alert, Button, Card, CardContent, Field, Input, cn } from '@rr/ui';
-import { ArrowLeft, Mail, MessageSquare, Phone } from 'lucide-react';
+import { Alert, Button, Card, CardContent, Field, Input } from '@rr/ui';
+import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { ApiError, apiPost, errorMessage, fieldErrors } from '@/lib/api';
 import { LandingNav } from '@/components/landing-nav';
 import { AuthLayout } from '@/components/auth-layout';
 import { OtpInput } from '@/components/otp-input';
-
-interface ForgotEmailResponse {
-  message: string;
-  devToken?: string;
-}
 
 interface ForgotPhoneResponse {
   message: string;
@@ -22,14 +17,6 @@ interface ForgotPhoneResponse {
 type PhoneStep = 'request' | 'verify' | 'done';
 
 export default function ForgotPasswordPage() {
-  const [mode, setMode] = useState<'email' | 'phone'>('email');
-
-  const [email, setEmail] = useState('');
-  const [emailBusy, setEmailBusy] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [emailFields, setEmailFields] = useState<Record<string, string>>({});
-  const [sent, setSent] = useState<ForgotEmailResponse | null>(null);
-
   const [phone, setPhone] = useState('');
   const [phoneStep, setPhoneStep] = useState<PhoneStep>('request');
   const [sentPhone, setSentPhone] = useState('');
@@ -49,24 +36,6 @@ export default function ForgotPasswordPage() {
     const timer = setInterval(() => setResendIn((value) => Math.max(0, value - 1)), 1000);
     return () => clearInterval(timer);
   }, [resendIn > 0]);
-
-  const submitEmail = async (event: FormEvent) => {
-    event.preventDefault();
-    setEmailBusy(true);
-    setEmailError(null);
-    setEmailFields({});
-    try {
-      const data = await apiPost<ForgotEmailResponse>('/api/auth/forgot-password', {
-        email: email.trim(),
-      });
-      setSent(data);
-    } catch (err) {
-      setEmailFields(fieldErrors(err));
-      setEmailError(errorMessage(err));
-    } finally {
-      setEmailBusy(false);
-    }
-  };
 
   const requestOtp = async (): Promise<void> => {
     const data = await apiPost<ForgotPhoneResponse>('/api/auth/forgot-password', {
@@ -93,7 +62,7 @@ export default function ForgotPasswordPage() {
         (err.code === 'SMS_NOT_CONFIGURED' || err.code === 'SMS_SEND_FAILED')
       ) {
         setPhoneError(
-          "SMS codes aren't working on this deployment right now — switch to the Email tab to reset your password.",
+          "SMS codes aren't working on this deployment right now — please try again in a few minutes.",
         );
       } else {
         setPhoneError(errorMessage(err));
@@ -134,17 +103,12 @@ export default function ForgotPasswordPage() {
     }
   };
 
-  const tabs: { key: 'email' | 'phone'; label: string; icon: typeof Mail }[] = [
-    { key: 'email', label: 'Email link', icon: Mail },
-    { key: 'phone', label: 'SMS code', icon: Phone },
-  ];
-
   return (
     <>
       <LandingNav />
       <AuthLayout
         headline="Locked out? That's a two-minute fix."
-        blurb="Reset by email link or a one-time SMS code — whichever you still have access to."
+        blurb="Reset with a one-time SMS code sent to your registered mobile number."
         footer={
           <>
             Remembered it?{' '}
@@ -158,77 +122,9 @@ export default function ForgotPasswordPage() {
           Forgot your password?
         </h1>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-          {tabs.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setMode(key)}
-              className={cn(
-                'flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition',
-                mode === key ? 'bg-white text-ink shadow-sm' : 'text-slate-500 hover:text-ink',
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-
         <Card className="mt-5">
           <CardContent className="py-5">
-            {mode === 'email' ? (
-              sent ? (
-                <div className="space-y-4">
-                  <Alert tone="success" title="Check your inbox">
-                    {sent.message}
-                  </Alert>
-                  {sent.devToken ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-                      <p className="text-xs font-semibold text-amber-900">
-                        Development mode — reset link without SMTP:
-                      </p>
-                      <Link
-                        href={`/reset-password?token=${encodeURIComponent(sent.devToken)}`}
-                        className="mt-1 block break-all font-mono text-xs font-medium text-brand-700 hover:underline"
-                      >
-                        Open reset link
-                      </Link>
-                    </div>
-                  ) : null}
-                  <Button variant="secondary" fullWidth onClick={() => setSent(null)}>
-                    Use a different email
-                  </Button>
-                </div>
-              ) : (
-                <>
-                  {emailError ? (
-                    <Alert tone="danger" className="mb-4">
-                      {emailError}
-                    </Alert>
-                  ) : null}
-                  <form onSubmit={submitEmail} className="space-y-4">
-                    <p className="text-sm text-slate-500">
-                      We'll email you a secure reset link, valid for one hour.
-                    </p>
-                    <Field label="Email" htmlFor="email" error={emailFields.email}>
-                      <Input
-                        id="email"
-                        type="email"
-                        autoComplete="email"
-                        required
-                        value={email}
-                        onChange={(event) => setEmail(event.target.value)}
-                        placeholder="you@example.com"
-                      />
-                    </Field>
-                    <Button type="submit" loading={emailBusy} fullWidth>
-                      Send reset link
-                    </Button>
-                  </form>
-                </>
-              )
-            ) : phoneStep === 'request' ? (
+            {phoneStep === 'request' ? (
               <>
                 {phoneError ? (
                   <Alert tone="danger" className="mb-4">

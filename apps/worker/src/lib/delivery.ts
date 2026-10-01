@@ -21,7 +21,7 @@ interface DeliveryTarget {
   phone: string | null;
 }
 
-function emailConfigured(env: Env): boolean {
+export function emailConfigured(env: Env): boolean {
   return Boolean(env.EMAIL_PROVIDER_KEY?.trim());
 }
 

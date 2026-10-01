@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Env } from '../env';
 import { ok } from '../lib/response';
-import { errors } from '../lib/errors';
+import { errors, AppError } from '../lib/errors';
 import { parseInput } from '../lib/validate';
 import { hashPassword, randomToken, sha256HexAsync, verifyPassword } from '../lib/crypto';
 import { buildSessionCookie, clearSessionCookie, createSession, destroySession, getSessionUser, sessionTokenFromRequest } from '../lib/session';
@@ -23,6 +23,7 @@ import {
 } from '@rr/validation';
 import { loadSessionUser } from '../lib/user-dto';
 import { createAuthOtp, verifyAuthOtp } from '../lib/auth-otp';
+import { emailConfigured } from '../lib/delivery';
 
 const routes = new Hono<{ Bindings: Env }>();
 
@@ -414,6 +415,15 @@ routes.post('/forgot-password', async (c) => {
   }
 
   const input = parseInput(forgotPasswordSchema, body);
+
+  // Phone-only product: email reset only works when an email provider is configured.
+  if (!emailConfigured(c.env)) {
+    throw new AppError(
+      'EMAIL_NOT_CONFIGURED',
+      'Email delivery is not configured on this deployment. Reset with your phone number instead.',
+      503,
+    );
+  }
 
   const user = await c.env.DB.prepare('SELECT id FROM users WHERE email = ? AND deleted_at IS NULL')
     .bind(input.email)
