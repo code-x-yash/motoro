@@ -157,9 +157,8 @@
         "PAYMENT_PROVIDER": "upi",
         "PAYMENT_UPI_VPA": "9760286560@kotak",
         "PAYMENT_UPI_NAME": "Motoro",
-        "SESSION_COOKIE_NAME": "rr_session",
-        // Set per environment: npx wrangler secret put SESSION_SECRET
-        "SESSION_SECRET": ""
+        "SESSION_COOKIE_NAME": "rr_session"
+        // SESSION_SECRET is set per environment: npx wrangler secret put SESSION_SECRET
       },
       "d1_databases": [
         {
