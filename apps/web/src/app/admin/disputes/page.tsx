@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -14,6 +15,7 @@ import {
   LoadingState,
   Modal,
   Table,
+  Tabs,
   Tbody,
   Td,
   Th,
@@ -116,25 +118,20 @@ function AdminDisputes() {
       {error ? <Alert tone="danger">{error}</Alert> : null}
       {notice ? <Alert tone="success">{notice}</Alert> : null}
 
+      <Tabs
+        tabs={[
+          { id: 'ALL', label: 'All' },
+          { id: 'OPEN', label: 'Open', badge: openCount ? <Badge tone="amber">{openCount}</Badge> : null },
+          { id: 'RESOLVED', label: 'Resolved' },
+        ]}
+        active={filter}
+        onChange={(id) => setFilter(id as 'ALL' | 'OPEN' | 'RESOLVED')}
+      />
+
       <Card>
         <CardHeader>
           <CardTitle>All disputes</CardTitle>
-          <div className="flex items-center gap-2">
-            {(['ALL', 'OPEN', 'RESOLVED'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setFilter(value)}
-                className={
-                  filter === value
-                    ? 'rounded-lg bg-brand-600 px-3 py-1 text-xs font-semibold text-white'
-                    : 'rounded-lg border border-slate-200 px-3 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100'
-                }
-              >
-                {value === 'ALL' ? 'All' : value === 'OPEN' ? `Open (${openCount})` : 'Resolved'}
-              </button>
-            ))}
-          </div>
+          <span className="text-xs text-slate-500">{visible.length} shown</span>
         </CardHeader>
         <CardContent className="p-0">
           {visible.length === 0 ? (
@@ -162,8 +159,15 @@ function AdminDisputes() {
                 {visible.map((dispute) => (
                   <Tr key={dispute.id}>
                     <Td>
-                      <p className="font-medium text-slate-900">{dispute.reference}</p>
-                      <p className="text-xs text-slate-400">{formatDateTime(dispute.createdAt)}</p>
+                      <p className="font-medium text-slate-900">
+                        <Link
+                          href={`/requests/detail?id=${dispute.requestId}`}
+                          className="hover:text-brand-700 hover:underline"
+                        >
+                          {dispute.reference}
+                        </Link>
+                      </p>
+                      <p className="mt-0.5 text-xs text-slate-400">{formatDateTime(dispute.createdAt)}</p>
                     </Td>
                     <Td>
                       <p className="text-sm text-slate-700">{dispute.raisedByName}</p>

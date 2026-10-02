@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { BRAND } from '@rr/config';
 import { Clock, Receipt, ShieldCheck, Wrench } from 'lucide-react';
@@ -22,7 +21,7 @@ export function AuthLayout({
 }) {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-canvas lg:grid lg:grid-cols-[1.05fr_1fr]">
-      <aside className="relative overflow-hidden bg-ink px-6 py-7 text-white sm:px-10 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-12">
+      <aside className="relative hidden overflow-hidden bg-ink px-6 py-7 text-white sm:px-10 lg:flex lg:flex-col lg:justify-between lg:px-14 lg:py-12">
         <div aria-hidden className="pointer-events-none absolute inset-0">
           <div className="absolute -right-28 -top-24 h-80 w-80 rounded-full bg-sun-400/25 blur-3xl" />
           <div className="absolute -bottom-36 -left-24 h-96 w-96 rounded-full bg-brand-500/20 blur-3xl" />
@@ -37,13 +36,6 @@ export function AuthLayout({
             }}
           />
         </div>
-
-        <Link href="/" className="relative inline-flex items-center gap-2.5 self-start">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-sun-400 text-base font-black text-ink">
-            {BRAND.name.slice(0, 1)}
-          </span>
-          <span className="text-lg font-extrabold tracking-tight">{BRAND.name}</span>
-        </Link>
 
         <div className="relative mt-10 hidden max-w-lg lg:block">
           <span className="inline-flex rounded-full bg-sun-400 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-ink">
@@ -91,18 +83,12 @@ export function AuthLayout({
         </div>
 
         <p className="relative mt-10 hidden text-xs text-slate-500 lg:block">
-          © {new Date().getFullYear()} Motoro · Help, wherever the road takes you.
+          © {new Date().getFullYear()} {BRAND.name} · Help, wherever the road takes you.
         </p>
       </aside>
 
       <main className="flex flex-col px-5 py-8 sm:px-10 lg:justify-center lg:px-14">
         <div className="mx-auto w-full max-w-md">
-          <Link href="/" className="mb-8 inline-flex items-center gap-2.5 lg:hidden">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sun-400 text-sm font-black text-ink">
-              {BRAND.name.slice(0, 1)}
-            </span>
-            <span className="text-base font-extrabold tracking-tight text-ink">{BRAND.name}</span>
-          </Link>
           {children}
           {footer ? <div className="mt-6 text-center text-sm text-slate-500">{footer}</div> : null}
         </div>

@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { BRAND } from '@rr/config';
+import type { Role } from '@rr/types';
 import {
   ArrowRight,
   BadgeCheck,
@@ -18,7 +19,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
-import { useAuth } from '@/lib/auth';
+import { homePathFor, useAuth } from '@/lib/auth';
 
 interface FaqItem {
   q: string;
@@ -112,17 +113,20 @@ const FAQ_GROUPS: FaqGroup[] = [
 ];
 
 function ctaFor(role: string | undefined): { label: string; href: string } {
+  if (!role) return { label: 'Request help now', href: '/register' };
   switch (role) {
     case 'DRIVER':
       return { label: 'Request help now', href: '/requests/new' };
     case 'MECHANIC':
+    case 'WORKSHOP':
+    case 'TOWING_PARTNER':
       return { label: 'Open my jobs', href: '/mechanic/jobs' };
     case 'ADMIN':
       return { label: 'Open admin', href: '/admin' };
     case 'OPERATIONS':
       return { label: 'Command centre', href: '/operations' };
     default:
-      return { label: 'Log in', href: '/login' };
+      return { label: 'Open dashboard', href: homePathFor(role as Role) };
   }
 }
 

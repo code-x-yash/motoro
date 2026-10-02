@@ -238,7 +238,7 @@ function RegisterForm() {
                     required
                     value={fullName}
                     onChange={(event) => setFullName(event.target.value)}
-                    placeholder="Yash Rajora"
+                    placeholder="Full name"
                   />
                 </Field>
                 <Field label="Email" htmlFor="email" error={fields.email}>
@@ -299,6 +299,17 @@ function RegisterForm() {
                 <Button type="submit" loading={busy} fullWidth>
                   {smsUnavailable ? 'Create account' : 'Send verification code'}
                 </Button>
+                <p className="text-center text-xs leading-relaxed text-slate-500">
+                  By creating an account you agree to our{' '}
+                  <Link href="/terms" className="font-medium text-brand-700 hover:underline">
+                    Terms
+                  </Link>{' '}
+                  and{' '}
+                  <Link href="/privacy" className="font-medium text-brand-700 hover:underline">
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
               </form>
             </CardContent>
           </Card>
@@ -333,6 +344,17 @@ function RegisterForm() {
                 <Button type="submit" loading={busy} fullWidth disabled={otp.length < 6}>
                   Create account
                 </Button>
+                <p className="text-center text-xs leading-relaxed text-slate-500">
+                  By creating an account you agree to our{' '}
+                  <Link href="/terms" className="font-medium text-brand-700 hover:underline">
+                    Terms
+                  </Link>{' '}
+                  and{' '}
+                  <Link href="/privacy" className="font-medium text-brand-700 hover:underline">
+                    Privacy Policy
+                  </Link>
+                  .
+                </p>
               </form>
 
               <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4 text-xs">

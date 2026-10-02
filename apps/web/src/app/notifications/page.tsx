@@ -3,13 +3,60 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { NotificationDto, Paginated } from '@rr/types';
-import { Alert, Badge, Button, Card, CardContent, EmptyState, LoadingState, cn } from '@rr/ui';
+import { Alert, Badge, Button, Card, CardContent, CardSkeleton, EmptyState, Tabs, cn } from '@rr/ui';
 import { Bell } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { api, apiGet, apiPost, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useRealtime } from '@/lib/realtime';
-import { timeAgo } from '@/lib/format';
+import { timeAgo, titleCase } from '@/lib/format';
+
+const NOTIFICATION_LABELS: Record<string, string> = {
+  REQUEST_CREATED: 'Request created',
+  EMERGENCY_CREATED: 'Emergency request created',
+  ACCIDENT_MODE: 'Accident mode',
+  DISPATCH_RETRY_SCHEDULED: 'Dispatch retry scheduled',
+  REQUEST_CANCELLED: 'Request cancelled',
+  CANCELLATION_FEE_APPLIED: 'Cancellation fee applied',
+  STATUS_SHARED: 'Status change shared',
+  PAYMENT_TO_CONFIRM: 'Payment awaiting confirmation',
+  PAYMENT_CLAIMED: 'Payment claimed',
+  PAYMENT_CREATED: 'Payment created',
+  PAYMENT_COMPLETED: 'Payment received',
+  PAYMENT_REFUNDED: 'Payment refunded',
+  PAYOUT_REQUESTED: 'Payout requested',
+  PAYOUT_PAID: 'Payout paid',
+  JOB_OFFER: 'New job offer',
+  DISPATCH_OFFERED: 'Dispatch offered',
+  DISPATCH_STARTED: 'Dispatch started',
+  DISPATCH_DECLINED: 'Dispatch declined',
+  DISPATCH_TIMEOUT: 'Dispatch timed out',
+  MECHANIC_ACCEPTED: 'Assigned mechanic',
+  MECHANIC_REASSIGNED: 'Mechanic reassigned',
+  MECHANIC_STALLED: 'Mechanic stalled',
+  MECHANIC_DELAYED: 'Mechanic delayed',
+  MECHANIC_DELAY_WARNING: 'Mechanic running late',
+  MECHANIC_EN_ROUTE: 'Mechanic en route',
+  MECHANIC_ARRIVED: 'Mechanic arrived',
+  EMERGENCY_ESCALATED: 'Request escalated',
+  ESCALATED: 'Request escalated',
+  DIAGNOSIS_UPDATED: 'Job update',
+  DIAGNOSIS_READY: 'Diagnosis ready',
+  QUOTE_CREATED: 'Quote ready for approval',
+  QUOTE_APPROVED: 'Quote approved',
+  QUOTE_REJECTED: 'Quote rejected',
+  REPAIR_COMPLETED: 'Repair completed',
+  PHOTO_ADDED: 'Photo added',
+  REVIEW_RECEIVED: 'Review received',
+  DISPUTE_RAISED: 'Dispute raised',
+  DISPUTE_RESOLVED: 'Dispute resolved',
+  VERIFICATION_SUBMITTED: 'Verification submitted',
+  VERIFICATION_DECISION: 'Verification decision',
+  OPS_MANUAL_ASSIGN: 'Manual assignment',
+  OPS_ASSIGNED_JOB: 'Job assigned by operations',
+  INTERNAL_NOTE: 'Operations note',
+  PASSWORD_RESET: 'Password reset',
+};
 
 function urlBase64ToUint8Array(base64String: string): BufferSource {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -34,6 +81,7 @@ function NotificationsContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [filter, setFilter] = useState('all');
   const [pushSupported] = useState(
     () =>
       typeof window !== 'undefined' &&
@@ -136,6 +184,9 @@ function NotificationsContent() {
     }
   };
 
+  const unreadCount = items.filter((item) => !item.readAt).length;
+  const visible = filter === 'unread' ? items.filter((item) => !item.readAt) : items;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -143,10 +194,23 @@ function NotificationsContent() {
           <h1 className="page-title">Notifications</h1>
           <p className="page-subtitle">Dispatch updates, quotes, payments and system notices.</p>
         </div>
-        <Button variant="secondary" size="sm" loading={busy} onClick={markAll}>
+        <Button variant="secondary" size="sm" loading={busy} disabled={unreadCount === 0} onClick={markAll}>
           Mark all read
         </Button>
       </div>
+
+      <Tabs
+        tabs={[
+          { id: 'all', label: 'All' },
+          {
+            id: 'unread',
+            label: 'Unread',
+            badge: unreadCount > 0 ? <Badge tone="blue">{unreadCount}</Badge> : null,
+          },
+        ]}
+        active={filter}
+        onChange={setFilter}
+      />
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
@@ -166,20 +230,28 @@ function NotificationsContent() {
         </Card>
       ) : null}
 
-      {loading ? <LoadingState /> : null}
+      {loading ? (
+        <Card>
+          <CardSkeleton rows={6} />
+        </Card>
+      ) : null}
 
-      {!loading && items.length === 0 ? (
+      {!loading && visible.length === 0 ? (
         <Card>
           <EmptyState
-            title="No notifications"
-            description="You will see dispatch, quote and payment updates here."
+            title={filter === 'unread' ? 'No unread notifications' : 'No notifications'}
+            description={
+              filter === 'unread'
+                ? 'You are all caught up — new dispatch and payment updates land here.'
+                : 'You will see dispatch, quote and payment updates here.'
+            }
             icon={<Bell className="h-10 w-10" />}
           />
         </Card>
       ) : null}
 
       <div className="space-y-2">
-        {items.map((item) => {
+        {visible.map((item) => {
           const requestId = typeof item.data?.requestId === 'string' ? item.data.requestId : null;
           const text = (
             <>
@@ -189,7 +261,7 @@ function NotificationsContent() {
               </div>
               <p className="mt-0.5 text-sm text-slate-600">{item.body}</p>
               <p className="mt-1 text-xs text-slate-400">
-                {timeAgo(item.createdAt)} · {item.type}
+                {timeAgo(item.createdAt)} · {NOTIFICATION_LABELS[item.type] ?? titleCase(item.type)}
                 {requestId ? ' · View request →' : ''}
               </p>
             </>

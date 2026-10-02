@@ -22,6 +22,13 @@ import { apiDelete, apiGet, apiPatch, apiPost, errorMessage, fieldErrors } from 
 const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'CNG', 'ELECTRIC', 'HYBRID'];
 const VEHICLE_TYPES: VehicleType[] = ['TWO_WHEELER', 'CAR', 'SUV', 'SCOOTER', 'COMMERCIAL', 'EV'];
 
+function formatDate(value: string | null | undefined): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 interface FormState {
   registrationNumber: string;
   make: string;
@@ -66,6 +73,8 @@ function VehiclesContent() {
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [confirmTarget, setConfirmTarget] = useState<VehicleDto | null>(null);
+  const [removing, setRemoving] = useState(false);
 
   const load = () =>
     void apiGet<Paginated<VehicleDto>>('/api/vehicles', { query: { limit: 50 } })
@@ -138,15 +147,18 @@ function VehiclesContent() {
   };
 
   const remove = async (vehicle: VehicleDto) => {
+    setRemoving(true);
     try {
       await apiDelete(`/api/vehicles/${vehicle.id}`);
       setVehicles((prev) => prev.filter((item) => item.id !== vehicle.id));
+      setConfirmTarget(null);
     } catch (err) {
       setError(errorMessage(err));
+      setConfirmTarget(null);
+    } finally {
+      setRemoving(false);
     }
   };
-
-  if (loading) return <LoadingState label="Loading garage…" />;
 
   return (
     <div className="space-y-5">
@@ -162,7 +174,9 @@ function VehiclesContent() {
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
 
-      {vehicles.length === 0 ? (
+      {loading ? <LoadingState label="Loading garage…" /> : null}
+
+      {!loading && vehicles.length === 0 ? (
         <Card>
           <EmptyState
             title="No vehicles yet"
@@ -171,7 +185,7 @@ function VehiclesContent() {
             icon={<Car className="h-10 w-10" />}
           />
         </Card>
-      ) : (
+      ) : !loading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {vehicles.map((vehicle) => (
             <Card key={vehicle.id}>
@@ -193,7 +207,7 @@ function VehiclesContent() {
                 <div className="flex flex-wrap gap-3 text-xs text-slate-500">
                   {vehicle.color ? <span>Color: {vehicle.color}</span> : null}
                   {vehicle.rcNumber ? <span>RC: {vehicle.rcNumber}</span> : null}
-                  {vehicle.insuranceExpiry ? <span>Insurance: {vehicle.insuranceExpiry}</span> : null}
+                  {vehicle.insuranceExpiry ? <span>Insurance: {formatDate(vehicle.insuranceExpiry)}</span> : null}
                 </div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="secondary" onClick={() => openEdit(vehicle)}>
@@ -203,11 +217,8 @@ function VehiclesContent() {
                     size="sm"
                     variant="ghost"
                     className="text-rose-600"
-                    onClick={() => {
-                      if (window.confirm(`Remove ${vehicle.registrationNumber} from your garage?`)) {
-                        void remove(vehicle);
-                      }
-                    }}
+                    aria-label={`Remove ${vehicle.registrationNumber}`}
+                    onClick={() => setConfirmTarget(vehicle)}
                   >
                     <Trash2 className="h-3.5 w-3.5" /> Remove
                   </Button>
@@ -216,7 +227,7 @@ function VehiclesContent() {
             </Card>
           ))}
         </div>
-      )}
+      ) : null}
 
       <Modal
         open={modalOpen}
@@ -299,6 +310,28 @@ function VehiclesContent() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(confirmTarget)}
+        onClose={() => setConfirmTarget(null)}
+        title="Remove this vehicle?"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setConfirmTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="danger" loading={removing} onClick={() => confirmTarget && void remove(confirmTarget)}>
+              Remove
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-600">
+          {confirmTarget
+            ? `${confirmTarget.registrationNumber} will be removed from your garage. Past requests keep their records.`
+            : null}
+        </p>
       </Modal>
     </div>
   );

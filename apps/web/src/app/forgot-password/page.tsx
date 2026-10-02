@@ -121,6 +121,9 @@ export default function ForgotPasswordPage() {
         <h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">
           Forgot your password?
         </h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Two steps — verify your mobile number, then set a new password.
+        </p>
 
         <Card className="mt-5">
           <CardContent className="py-5">

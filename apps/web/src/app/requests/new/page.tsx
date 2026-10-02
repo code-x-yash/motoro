@@ -1,10 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import type { VehicleDto, Paginated, EmergencyRequestDto } from '@rr/types';
 import { ISSUE_TYPES, type IssueType } from '@rr/config';
-import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, Field, Input, Select, Textarea, cn } from '@rr/ui';
+import { Alert, Button, Card, CardContent, CardHeader, CardTitle, Checkbox, EmptyState, Field, Input, Select, Textarea, cn } from '@rr/ui';
 import { Battery, CircleDot, Crosshair, Fuel, Gauge, HelpCircle, ImagePlus, KeyRound, Lightbulb, Siren, Thermometer, Wrench, X } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { ApiError, apiGet, apiPost, errorMessage, fieldErrors } from '@/lib/api';
@@ -82,6 +83,7 @@ export default function NewRequestPage() {
 function NewRequestForm() {
   const router = useRouter();
   const [vehicles, setVehicles] = useState<VehicleDto[]>([]);
+  const [vehiclesError, setVehiclesError] = useState(false);
   const [vehicleId, setVehicleId] = useState('');
   const [issueType, setIssueType] = useState<IssueType>('BATTERY');
   const [urgency, setUrgency] = useState('NORMAL');
@@ -155,7 +157,7 @@ function NewRequestForm() {
         setVehicles(data.items);
         if (data.items[0]) setVehicleId(data.items[0].id);
       })
-      .catch(() => undefined);
+      .catch(() => setVehiclesError(true));
   }, []);
 
   const isAccident = issueType === 'ACCIDENT';
@@ -195,6 +197,13 @@ function NewRequestForm() {
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    const accuracy = Number.isFinite(Number(location.accuracy)) ? Number(location.accuracy) : 0;
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
+      setError('Location unavailable — try again');
+      return;
+    }
     setBusy(true);
     setError(null);
     setFields({});
@@ -203,9 +212,9 @@ function NewRequestForm() {
         issueType,
         urgency,
         description: description.trim() || null,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
+        latitude,
+        longitude,
+        accuracy,
         address: address.trim() || null,
         channel: 'WEB',
         vehicleId: vehicleId || null,
@@ -321,6 +330,25 @@ function NewRequestForm() {
                     </option>
                   ))}
                 </Select>
+                {vehicles.length === 0 ? (
+                  <EmptyState
+                    className="px-0 py-4 text-left"
+                    title="No vehicles in your garage"
+                    description={
+                      vehiclesError
+                        ? 'Your garage could not be loaded — you can still request help without a vehicle.'
+                        : 'Add your car, bike or scooter so dispatch knows what is stranded.'
+                    }
+                    action={
+                      <Link
+                        href="/vehicles"
+                        className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 text-xs font-semibold text-white hover:bg-brand-700"
+                      >
+                        Add a vehicle
+                      </Link>
+                    }
+                  />
+                ) : null}
               </Field>
             </div>
 
@@ -386,20 +414,24 @@ function NewRequestForm() {
                   }}
                 >
                   <Crosshair className="h-3.5 w-3.5" />
-                  Use my location
+                  {locationLabel.startsWith('Using default') ? 'Use my location' : 'Refresh location'}
                 </Button>
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <Field label="Latitude">
+                <Field label="Latitude" hint="Detected automatically.">
                   <Input
-                    value={location.latitude}
-                    onChange={(event) => setLocation((prev) => ({ ...prev, latitude: Number(event.target.value) }))}
+                    readOnly
+                    value={Number.isFinite(location.latitude) ? location.latitude.toFixed(5) : ''}
+                    className="bg-slate-100 text-slate-600"
+                    aria-label="Detected latitude"
                   />
                 </Field>
-                <Field label="Longitude">
+                <Field label="Longitude" hint="Detected automatically.">
                   <Input
-                    value={location.longitude}
-                    onChange={(event) => setLocation((prev) => ({ ...prev, longitude: Number(event.target.value) }))}
+                    readOnly
+                    value={Number.isFinite(location.longitude) ? location.longitude.toFixed(5) : ''}
+                    className="bg-slate-100 text-slate-600"
+                    aria-label="Detected longitude"
                   />
                 </Field>
                 <Field label="Address (optional)" hint="Type an address or use my location to auto-fill.">

@@ -199,7 +199,10 @@ function Earnings() {
       <Card>
         <CardHeader>
           <CardTitle>Payouts</CardTitle>
-          <span className="text-xs text-slate-500">Withdraw your settled earnings to your bank account.</span>
+          <span className="text-xs text-slate-500">
+            Withdraw your settled earnings to your bank account. Payouts are processed weekly to your registered
+            account.
+          </span>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="grid-stat">
@@ -295,7 +298,11 @@ function Earnings() {
               </Tbody>
             </Table>
           ) : (
-            <p className="text-sm text-slate-500">No payout requests yet.</p>
+            <EmptyState
+              title="No payout requests yet"
+              description="Request a payout above and it appears here once operations reviews it."
+              className="py-6"
+            />
           )}
         </CardContent>
       </Card>

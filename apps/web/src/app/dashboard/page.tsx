@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { EmergencyRequestDto, Paginated, VehicleDto } from '@rr/types';
-import { Alert, Badge, EmptyState, LoadingState, StatusBadge, UrgencyBadge, cn } from '@rr/ui';
+import { Alert, Badge, Button, EmptyState, LoadingState, StatusBadge, Stepper, UrgencyBadge, cn } from '@rr/ui';
 import {
   ArrowRight,
   Bell,
@@ -21,26 +21,7 @@ import { AppShell } from '@/components/app-shell';
 import { apiGet } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { formatDateTime, formatEta, titleCase } from '@/lib/format';
-
-const ACTIVE_STEPS = [
-  'CREATED',
-  'SEARCHING',
-  'DISPATCHING',
-  'ASSIGNED',
-  'MECHANIC_EN_ROUTE',
-  'ARRIVED',
-  'DIAGNOSING',
-  'QUOTE_PENDING',
-  'REPAIRING',
-  'COMPLETED',
-];
-
-function stepIndex(status: string): number {
-  const index = ACTIVE_STEPS.indexOf(status);
-  if (index >= 0) return index;
-  if (status === 'PAID' || status === 'PAYMENT_PENDING') return ACTIVE_STEPS.length - 1;
-  return 0;
-}
+import { PROGRESS_STEPS, progressStepIndex } from '@/lib/progress';
 
 type TileTone = 'brand' | 'sun' | 'white' | 'ink';
 
@@ -100,6 +81,7 @@ function DriverDashboard() {
   const [recent, setRecent] = useState<EmergencyRequestDto[]>([]);
   const [vehicles, setVehicles] = useState<VehicleDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [retrying, setRetrying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
@@ -130,6 +112,12 @@ function DriverDashboard() {
     return () => clearInterval(timer);
   }, []);
 
+  const retry = async () => {
+    setRetrying(true);
+    await load();
+    setRetrying(false);
+  };
+
   if (loading) return <LoadingState label="Loading your dashboard…" />;
 
   const firstName = user?.fullName?.trim().split(/\s+/)[0] ?? 'there';
@@ -147,7 +135,7 @@ function DriverDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="card-bright animate-fade-up flex flex-wrap items-center justify-between gap-4 p-5 sm:p-6">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
           <span className="section-eyebrow">{today}</span>
           <h1 className="page-title mt-3">
@@ -169,7 +157,18 @@ function DriverDashboard() {
         </Link>
       </div>
 
-      {error ? <Alert tone="danger">{error}</Alert> : null}
+      {error ? (
+        <Alert
+          tone="danger"
+          action={
+            <Button size="sm" variant="secondary" loading={retrying} onClick={() => void retry()}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      ) : null}
 
       <section className="space-y-3">
         <div className="flex items-center justify-between">
@@ -258,17 +257,7 @@ function DriverDashboard() {
                     <span>{active.vehicleLabel ?? 'Vehicle not set'}</span>
                     <span>{formatEta(active.assignedMechanic?.etaMinutes)}</span>
                   </div>
-                  <div className="flex gap-1">
-                    {ACTIVE_STEPS.map((step, index) => (
-                      <div
-                        key={step}
-                        className={cn(
-                          'h-1.5 flex-1 rounded-full',
-                          index <= stepIndex(active.status) ? 'bg-brand-600' : 'bg-slate-200',
-                        )}
-                      />
-                    ))}
-                  </div>
+                  <Stepper steps={[...PROGRESS_STEPS]} current={progressStepIndex(active.status)} className="mt-3" />
                   <p className="mt-2 text-xs text-slate-500">
                     {titleCase(active.status)} · created {formatDateTime(active.createdAt)}
                   </p>

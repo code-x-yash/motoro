@@ -337,6 +337,7 @@ export function MapPanel({
   }, [mode, routeKeyStr]);
 
   const leafletPins = mode === 'leaflet';
+  const statusLabel = mode === 'leaflet' ? 'live' : mode === 'fallback' ? 'static' : 'loading';
   const pins: { marker: MapMarker; left: number | string; top: number | string }[] = leafletPins
     ? markers.flatMap((marker) => {
         const point = points[marker.id];
@@ -388,7 +389,7 @@ export function MapPanel({
           </a>
         ) : null}
         <div className="pointer-events-none absolute bottom-2 left-2 z-[600] rounded bg-white/90 px-2 py-1 text-[10px] text-slate-500 shadow-sm">
-          {markers.length} location{markers.length === 1 ? '' : 's'} · live
+          {markers.length} location{markers.length === 1 ? '' : 's'} · {statusLabel}
         </div>
       </div>
       {footer ? <div className="border-t border-slate-200 bg-white px-3 py-2">{footer}</div> : null}

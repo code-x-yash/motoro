@@ -9,6 +9,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  EmptyState,
   Field,
   Input,
   LoadingState,
@@ -183,6 +184,9 @@ function AdminPayments() {
       <div>
         <h1 className="page-title">Payments & payouts</h1>
         <p className="page-subtitle">Issue refunds and settle mechanic withdrawal requests.</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Records reflect the payment provider configured for this platform.
+        </p>
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -195,7 +199,7 @@ function AdminPayments() {
         </CardHeader>
         <CardContent className="p-0">
           {payouts.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-slate-500">No payout requests yet.</p>
+            <EmptyState title="No payout requests yet" description="Mechanic withdrawal requests appear here." />
           ) : (
             <Table>
               <Thead>
@@ -216,9 +220,15 @@ function AdminPayments() {
                       <div className="text-xs text-slate-500">{payout.mechanicEmail}</div>
                     </Td>
                     <Td className="text-xs text-slate-600">
-                      {payout.account?.accountHolder ?? '—'}
-                      <br />
-                      {payout.account?.accountNumber ?? ''} · {payout.account?.ifsc ?? ''}
+                      {payout.account ? (
+                        <>
+                          {payout.account.accountHolder ?? '—'}
+                          <br />
+                          {payout.account.accountNumber ?? '—'} · {payout.account.ifsc ?? '—'}
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </Td>
                     <Td>{formatDateTime(payout.createdAt)}</Td>
                     <Td className="font-semibold tabular-nums">{formatINR(payout.amountCents)}</Td>
@@ -261,90 +271,96 @@ function AdminPayments() {
           <span className="text-xs text-slate-500">{payments.length} newest</span>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <Thead>
-              <Tr>
-                <Th>Reference</Th>
-                <Th>Driver</Th>
-                <Th>Method</Th>
-                <Th>Amount</Th>
-                <Th>Status</Th>
-                <Th className="text-right">Actions</Th>
-              </Tr>
-            </Thead>
-            <Tbody>
-              {payments.map((payment) => (
-                <Tr key={payment.id}>
-                  <Td className="font-medium text-slate-800">{payment.reference}</Td>
-                  <Td>{payment.driverName}</Td>
-                  <Td>
-                    <Badge>{payment.provider}{payment.method ? ` · ${payment.method}` : ''}</Badge>
-                    {payment.couponCode ? (
-                      <div className="mt-0.5 text-xs text-slate-500">Coupon {payment.couponCode}</div>
-                    ) : null}
-                    {payment.status === 'PENDING' &&
-                    (payment.providerPaymentId ?? payment.providerRef) ? (
-                      <div className="mt-0.5 font-mono text-xs text-slate-500">
-                        {payment.providerPaymentId ? `ref ${payment.providerPaymentId}` : payment.providerRef}
-                      </div>
-                    ) : null}
-                  </Td>
-                  <Td className="font-semibold tabular-nums">{formatINR(payment.amountCents)}</Td>
-                  <Td>
-                    <Badge tone={PAYMENT_TONE[payment.status] ?? 'slate'}>{payment.status}</Badge>
-                    {(payment.refundedCents ?? 0) > 0 ? (
-                      <div className="mt-0.5 text-xs text-rose-600">
-                        {formatINR(payment.refundedCents ?? 0)} refunded
-                        {payment.refundedAt ? ` · ${formatDateTime(payment.refundedAt)}` : ''}
-                        {payment.refundReason ? ` · ${payment.refundReason}` : ''}
-                      </div>
-                    ) : payment.refundedAt ? (
-                      <div className="mt-0.5 text-xs text-slate-400">
-                        {formatDateTime(payment.refundedAt)}
-                        {payment.refundReason ? ` · ${payment.refundReason}` : ''}
-                      </div>
-                    ) : null}
-                  </Td>
-                  <Td className="text-right">
-                    <div className="flex justify-end gap-2">
-                      {payment.status === 'PENDING' && payment.provider === 'upi' ? (
-                        <Button
-                          size="sm"
-                          variant="success"
-                          disabled={busy}
-                          onClick={() => void settlePayment(payment)}
-                        >
-                          Mark received
-                        </Button>
-                      ) : null}
-                      {payment.status === 'PAID' &&
-                      payment.provider !== 'upi' &&
-                      (payment.refundedCents ?? 0) < payment.amountCents ? (
-                        <Button
-                          size="sm"
-                          variant="danger"
-                          disabled={busy}
-                          onClick={() => {
-                            setRefundTarget(payment);
-                            setRefundReason('');
-                            setRefundAmount('');
-                          }}
-                        >
-                          Refund
-                        </Button>
-                      ) : payment.provider === 'upi' ? (
-                        <span className="text-xs text-slate-400" title="UPI refunds are sent from your bank/UPI app">
-                          —
-                        </span>
-                      ) : (
-                        <span className="text-xs text-slate-400">—</span>
-                      )}
-                    </div>
-                  </Td>
+          {payments.length === 0 ? (
+            <EmptyState title="No payments yet" description="Settled customer payments appear here." />
+          ) : (
+            <Table>
+              <Thead>
+                <Tr>
+                  <Th>Reference</Th>
+                  <Th>Driver</Th>
+                  <Th>Method</Th>
+                  <Th>Amount</Th>
+                  <Th>Status</Th>
+                  <Th className="text-right">Actions</Th>
                 </Tr>
-              ))}
-            </Tbody>
-          </Table>
+              </Thead>
+              <Tbody>
+                {payments.map((payment) => (
+                  <Tr key={payment.id}>
+                    <Td className="font-medium text-slate-800">{payment.reference}</Td>
+                    <Td>{payment.driverName}</Td>
+                    <Td>
+                      <Badge>
+                        {payment.provider}
+                        {payment.method ? ` · ${payment.method}` : ''}
+                      </Badge>
+                      {payment.couponCode ? (
+                        <div className="mt-0.5 text-xs text-slate-500">Coupon {payment.couponCode}</div>
+                      ) : null}
+                      {payment.status === 'PENDING' && (payment.providerPaymentId ?? payment.providerRef) ? (
+                        <div className="mt-0.5 font-mono text-xs text-slate-500">
+                          {payment.providerPaymentId ? `ref ${payment.providerPaymentId}` : payment.providerRef}
+                        </div>
+                      ) : null}
+                    </Td>
+                    <Td className="font-semibold tabular-nums">{formatINR(payment.amountCents)}</Td>
+                    <Td>
+                      <Badge tone={PAYMENT_TONE[payment.status] ?? 'slate'}>{payment.status}</Badge>
+                      {(payment.refundedCents ?? 0) > 0 ? (
+                        <div className="mt-0.5 text-xs text-rose-600">
+                          {formatINR(payment.refundedCents ?? 0)} refunded
+                          {payment.refundedAt ? ` · ${formatDateTime(payment.refundedAt)}` : ''}
+                          {payment.refundReason ? ` · ${payment.refundReason}` : ''}
+                        </div>
+                      ) : payment.refundedAt ? (
+                        <div className="mt-0.5 text-xs text-slate-400">
+                          {formatDateTime(payment.refundedAt)}
+                          {payment.refundReason ? ` · ${payment.refundReason}` : ''}
+                        </div>
+                      ) : null}
+                    </Td>
+                    <Td className="text-right">
+                      <div className="flex justify-end gap-2">
+                        {payment.status === 'PENDING' && payment.provider === 'upi' ? (
+                          <Button
+                            size="sm"
+                            variant="success"
+                            disabled={busy}
+                            onClick={() => void settlePayment(payment)}
+                          >
+                            Mark received
+                          </Button>
+                        ) : null}
+                        {payment.status === 'PAID' &&
+                        payment.provider !== 'upi' &&
+                        (payment.refundedCents ?? 0) < payment.amountCents ? (
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            disabled={busy}
+                            onClick={() => {
+                              setRefundTarget(payment);
+                              setRefundReason('');
+                              setRefundAmount('');
+                            }}
+                          >
+                            Refund
+                          </Button>
+                        ) : payment.provider === 'upi' ? (
+                          <span className="text-xs text-slate-400" title="UPI refunds are sent from your bank/UPI app">
+                            —
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400">—</span>
+                        )}
+                      </div>
+                    </Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          )}
         </CardContent>
       </Card>
 

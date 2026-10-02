@@ -3,6 +3,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import type { EmergencyContactDto } from '@rr/types';
 import {
+  Alert,
   Avatar,
   Badge,
   Button,
@@ -10,6 +11,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  EmptyState,
   Field,
   Input,
   LoadingState,
@@ -39,6 +41,7 @@ function ProfileContent() {
   const [loaded, setLoaded] = useState(false);
   const [notifPrefs, setNotifPrefs] = useState<Record<string, boolean>>({});
   const [notifSaved, setNotifSaved] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -54,7 +57,21 @@ function ProfileContent() {
       .catch(() => undefined);
   }, [user]);
 
-  if (!user) return <LoadingState />;
+  const header = (
+    <div>
+      <h1 className="page-title">Profile</h1>
+      <p className="page-subtitle">Account details, notification preferences and emergency contacts.</p>
+    </div>
+  );
+
+  if (!user) {
+    return (
+      <div className="max-w-5xl space-y-5">
+        {header}
+        <LoadingState label="Loading your profile…" />
+      </div>
+    );
+  }
 
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
@@ -62,6 +79,8 @@ function ProfileContent() {
     try {
       await apiPatch('/api/me', { fullName: fullName.trim(), phone: phone.trim() || undefined, locale });
       await refresh();
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 3000);
     } catch (err) {
       setFields(fieldErrors(err));
     }
@@ -124,6 +143,8 @@ function ProfileContent() {
 
   return (
     <div className="grid max-w-5xl gap-5 lg:grid-cols-3">
+      <div className="lg:col-span-3">{header}</div>
+
       <Card className="lg:col-span-1">
         <CardContent className="space-y-4 py-6">
           <div className="flex items-center gap-3">
@@ -165,6 +186,11 @@ function ProfileContent() {
             <CardTitle>Account</CardTitle>
           </CardHeader>
           <CardContent>
+            {saved ? (
+              <Alert tone="success" className="mb-4">
+                Profile saved.
+              </Alert>
+            ) : null}
             <form onSubmit={saveProfile} className="grid gap-4 sm:grid-cols-2">
               <Field label="Full name" error={fields.fullName}>
                 <Input value={fullName} onChange={(event) => setFullName(event.target.value)} />
@@ -230,7 +256,15 @@ function ProfileContent() {
           <CardContent className="space-y-4">
             {!loaded ? <LoadingState /> : null}
             {contacts.length === 0 && loaded ? (
-              <p className="text-sm text-slate-500">No emergency contacts yet.</p>
+              <EmptyState
+                title="No emergency contacts yet"
+                description="Add someone we can keep updated while you are on the road."
+                action={
+                  <Button variant="secondary" onClick={() => document.getElementById('contact-name')?.focus()}>
+                    Add a contact
+                  </Button>
+                }
+              />
             ) : (
               <div className="space-y-2">
                 {contacts.map((contact) => (
@@ -241,7 +275,12 @@ function ProfileContent() {
                         {contact.phone} · {contact.relationship}
                       </p>
                     </div>
-                    <Button size="sm" variant="ghost" onClick={() => void removeContact(contact.id)}>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      aria-label={`Remove ${contact.name}`}
+                      onClick={() => void removeContact(contact.id)}
+                    >
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -251,7 +290,7 @@ function ProfileContent() {
 
             <form onSubmit={addContact} className="grid gap-3 sm:grid-cols-4">
               <Field label="Name">
-                <Input name="name" required placeholder="Sunita" />
+                <Input id="contact-name" name="name" required placeholder="Sunita" />
               </Field>
               <Field label="Phone">
                 <Input name="phone" required placeholder="98765 43210" />

@@ -17,6 +17,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  EmptyState,
   Field,
   Input,
   LoadingState,
@@ -549,7 +550,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
 
       <ProgressStrip status={request.status} />
 
-      {request.photos && request.photos.length > 0 ? (
+      {request.photos && request.photos.some((photo) => photo.url) ? (
         <Card>
           <CardHeader>
             <CardTitle>Breakdown photos</CardTitle>
@@ -557,15 +558,17 @@ export function RequestSession({ requestId }: { requestId: string }) {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {request.photos.map((photo) => (
-                <a key={photo.id} href={photo.url ?? '#'} target="_blank" rel="noreferrer">
-                  <img
-                    src={photo.url ?? ''}
-                    alt={photo.caption ?? `Breakdown photo (${photo.stage.toLowerCase()})`}
-                    className="h-24 w-24 rounded-lg border border-slate-200 object-cover transition hover:opacity-80"
-                  />
-                </a>
-              ))}
+              {request.photos.map((photo) =>
+                photo.url ? (
+                  <a key={photo.id} href={photo.url} target="_blank" rel="noreferrer">
+                    <img
+                      src={photo.url}
+                      alt={photo.caption ?? `Breakdown photo (${photo.stage.toLowerCase()})`}
+                      className="h-24 w-24 rounded-lg border border-slate-200 object-cover transition hover:opacity-80"
+                    />
+                  </a>
+                ) : null,
+              )}
             </div>
           </CardContent>
         </Card>
@@ -901,19 +904,26 @@ export function RequestSession({ requestId }: { requestId: string }) {
               <span className="text-xs text-slate-500">{timeline.length} events</span>
             </CardHeader>
             <CardContent>
-              <ol className="space-y-3">
-                {[...timeline].reverse().map((event) => (
-                  <li key={event.id} className="flex gap-3">
-                    <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
-                    <div className="min-w-0">
-                      <p className="text-sm text-slate-700">{event.message}</p>
-                      <p className="text-xs text-slate-400">
-                        {formatDateTime(event.createdAt)} · {event.actorRole ?? 'SYSTEM'}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ol>
+              {timeline.length === 0 ? (
+                <EmptyState
+                  title="No timeline events yet"
+                  description="Dispatch, quote and payment steps appear here the moment they happen."
+                />
+              ) : (
+                <ol className="space-y-3">
+                  {[...timeline].reverse().map((event) => (
+                    <li key={event.id} className="flex gap-3">
+                      <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-slate-700">{event.message}</p>
+                        <p className="text-xs text-slate-400">
+                          {formatDateTime(event.createdAt)} · {event.actorRole ?? 'SYSTEM'}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+              )}
             </CardContent>
           </Card>
         </div>

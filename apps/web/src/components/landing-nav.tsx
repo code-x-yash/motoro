@@ -21,12 +21,15 @@ export function LandingNav() {
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm font-medium text-slate-600 sm:flex">
-          <a href="#how" className="transition hover:text-ink">
+          <Link href="/#how" className="transition hover:text-ink">
             {t('nav.how')}
-          </a>
-          <a href="#services" className="transition hover:text-ink">
+          </Link>
+          <Link href="/#services" className="transition hover:text-ink">
             {t('nav.services')}
-          </a>
+          </Link>
+          <Link href="/track" className="transition hover:text-ink">
+            {t('nav.track')}
+          </Link>
           <Link href="/help" className="transition hover:text-ink">
             {t('nav.help')}
           </Link>
@@ -75,20 +78,27 @@ export function LandingNav() {
       {open ? (
         <div className="border-t border-slate-100 bg-white px-4 py-4 sm:hidden">
           <div className="flex flex-col gap-1 text-sm">
-            <a
-              href="#how"
+            <Link
+              href="/#how"
               className="rounded-lg px-3 py-2.5 font-medium text-slate-700 transition hover:bg-slate-50"
               onClick={() => setOpen(false)}
             >
               {t('nav.how')}
-            </a>
-            <a
-              href="#services"
+            </Link>
+            <Link
+              href="/#services"
               className="rounded-lg px-3 py-2.5 font-medium text-slate-700 transition hover:bg-slate-50"
               onClick={() => setOpen(false)}
             >
               {t('nav.services')}
-            </a>
+            </Link>
+            <Link
+              href="/track"
+              className="rounded-lg px-3 py-2.5 font-medium text-slate-700 transition hover:bg-slate-50"
+              onClick={() => setOpen(false)}
+            >
+              {t('nav.track')}
+            </Link>
             <Link
               href="/help"
               className="rounded-lg px-3 py-2.5 font-medium text-slate-700 transition hover:bg-slate-50"

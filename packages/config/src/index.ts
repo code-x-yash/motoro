@@ -13,9 +13,9 @@ export const BRAND = {
   tagline: 'Never leave the customer stranded.',
   description:
     '24x7 roadside assistance and mechanic dispatch platform. Emergency help in minutes, verified mechanics, live tracking.',
-  supportPhone: '+91 1800 000 0000',
-  supportEmail: 'support@motoro.example',
-  domain: 'motoro.example',
+  supportPhone: '+91 97602 86560',
+  supportEmail: 'yashrajwanshii@gmail.com',
+  domain: 'motoro-web.vercel.app',
 } as const;
 
 export type Brand = typeof BRAND;

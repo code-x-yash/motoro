@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Alert, Badge, Button, Card, CardContent, Field, Input, LoadingState, Modal, Select, Table, Tbody, Td, Th, Thead, Tr } from '@rr/ui';
+import { Alert, Badge, Button, Card, CardContent, CopyButton, EmptyState, Field, Input, KeyValue, LoadingState, Modal, Select, Table, Tbody, Td, Th, Thead, Tr } from '@rr/ui';
 import { AppShell } from '@/components/app-shell';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, titleCase } from '@/lib/format';
 
 interface AdminUser {
   id: string;
@@ -34,6 +34,7 @@ function AdminUsers() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [target, setTarget] = useState<AdminUser | null>(null);
+  const [viewTarget, setViewTarget] = useState<AdminUser | null>(null);
   const [reason, setReason] = useState('');
 
   const load = async () => {
@@ -97,6 +98,13 @@ function AdminUsers() {
         <CardContent className="p-0">
           {loading ? (
             <LoadingState />
+          ) : users.length === 0 ? (
+            <EmptyState
+              title="No users found"
+              description={
+                role ? 'No accounts match the selected role filter.' : 'Registered accounts appear here as soon as they sign up.'
+              }
+            />
           ) : (
             <Table>
               <Thead>
@@ -128,9 +136,18 @@ function AdminUsers() {
                     <Td>{formatDateTime(user.createdAt)}</Td>
                     <Td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}</Td>
                     <Td className="text-right">
-                      <Button size="sm" variant={user.status === 'SUSPENDED' ? 'secondary' : 'danger'} onClick={() => setTarget(user)}>
-                        {user.status === 'SUSPENDED' ? 'Reinstate' : 'Suspend'}
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="secondary" onClick={() => setViewTarget(user)}>
+                          View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={user.status === 'SUSPENDED' ? 'secondary' : 'danger'}
+                          onClick={() => setTarget(user)}
+                        >
+                          {user.status === 'SUSPENDED' ? 'Reinstate' : 'Suspend'}
+                        </Button>
+                      </div>
                     </Td>
                   </Tr>
                 ))}
@@ -161,6 +178,33 @@ function AdminUsers() {
         <Field label="Reason" className="mt-3">
           <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Policy violation, request from ops…" />
         </Field>
+      </Modal>
+
+      <Modal
+        open={Boolean(viewTarget)}
+        onClose={() => setViewTarget(null)}
+        title="Account details"
+        footer={
+          <Button variant="secondary" onClick={() => setViewTarget(null)}>
+            Close
+          </Button>
+        }
+      >
+        {viewTarget ? (
+          <div className="divide-y divide-slate-100">
+            <KeyValue label="Name" value={viewTarget.fullName} />
+            <KeyValue label="Email" value={viewTarget.email} />
+            <KeyValue label="Phone" value={viewTarget.phone ?? '—'} />
+            <KeyValue label="Role" value={titleCase(viewTarget.role)} />
+            <KeyValue
+              label="Status"
+              value={<Badge tone={viewTarget.status === 'ACTIVE' ? 'emerald' : 'rose'}>{titleCase(viewTarget.status)}</Badge>}
+            />
+            <KeyValue label="User ID" value={<CopyButton value={viewTarget.id} label="Copy id" />} />
+            <KeyValue label="Created" value={formatDateTime(viewTarget.createdAt)} />
+            <KeyValue label="Last login" value={viewTarget.lastLoginAt ? formatDateTime(viewTarget.lastLoginAt) : 'Never'} />
+          </div>
+        ) : null}
       </Modal>
     </div>
   );

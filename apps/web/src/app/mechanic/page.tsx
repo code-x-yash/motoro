@@ -22,7 +22,7 @@ import { AppShell } from '@/components/app-shell';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { useRealtime } from '@/lib/realtime';
-import { formatDistance, formatEta, titleCase } from '@/lib/format';
+import { formatDistance, formatEta, formatINR, titleCase } from '@/lib/format';
 
 interface Offer {
   attemptId: string;
@@ -81,6 +81,7 @@ function MechanicBoard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [responding, setResponding] = useState<string[]>([]);
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
@@ -125,8 +126,13 @@ function MechanicBoard() {
     [jobs],
   );
 
+  const liveOffers = useMemo(
+    () => offers.filter((offer) => (offer.secondsLeft ?? 0) > 0),
+    [offers],
+  );
+
   const respond = async (attemptId: string, action: 'accept' | 'decline', reason?: string) => {
-    setBusy(true);
+    setResponding((prev) => [...prev, attemptId]);
     setError(null);
     try {
       await apiPost(`/api/dispatch/${attemptId}/${action}`, reason ? { reason } : {});
@@ -134,7 +140,7 @@ function MechanicBoard() {
     } catch (err) {
       setError(errorMessage(err));
     } finally {
-      setBusy(false);
+      setResponding((prev) => prev.filter((id) => id !== attemptId));
     }
   };
 
@@ -167,9 +173,12 @@ function MechanicBoard() {
         </div>
         <div className="flex items-center gap-2">
           <span className={cn('h-2.5 w-2.5 rounded-full', online ? 'bg-emerald-500' : 'bg-slate-300')} />
-          <span className="text-xs font-medium text-slate-600">
-            {stats?.verificationStatus ?? '…'} · {titleCase(stats?.status ?? 'UNKNOWN')}
-          </span>
+          <span className="text-xs font-medium text-slate-600">{stats ? titleCase(stats.status) : '…'}</span>
+          {stats ? (
+            <Badge tone={stats.verificationStatus === 'VERIFIED' ? 'emerald' : 'amber'}>
+              {titleCase(stats.verificationStatus)}
+            </Badge>
+          ) : null}
           <Button variant={online ? 'secondary' : 'success'} size="sm" loading={busy} onClick={toggleOnline}>
             {online ? 'Go offline' : 'Go online'}
           </Button>
@@ -184,12 +193,12 @@ function MechanicBoard() {
       ) : null}
 
       <div className="grid-stat">
-        <Stat label="Pending offers" value={stats?.pendingOffers ?? 0} tone={offers.length ? 'amber' : 'slate'} />
+        <Stat label="Pending offers" value={stats?.pendingOffers ?? 0} tone={liveOffers.length ? 'amber' : 'slate'} />
         <Stat label="Active jobs" value={stats?.activeJobs ?? 0} tone="blue" />
         <Stat label="Completed" value={stats?.jobsCompleted ?? 0} tone="emerald" />
         <Stat
           label="Earnings"
-          value={`₹${Math.round((stats?.earningsCents ?? 0) / 100).toLocaleString('en-IN')}`}
+          value={formatINR(stats?.earningsCents ?? 0)}
           hint={`${stats?.acceptanceRate ?? 0}% acceptance`}
         />
       </div>
@@ -198,10 +207,10 @@ function MechanicBoard() {
         <div className="flex items-center gap-2">
           <Radio className="h-4 w-4 text-brand-600" />
           <h2 className="text-sm font-semibold text-slate-900">Incoming offers</h2>
-          {offers.length ? <Badge tone="amber">{offers.length} live</Badge> : null}
+          {liveOffers.length ? <Badge tone="amber">{liveOffers.length} live</Badge> : null}
         </div>
 
-        {offers.length === 0 ? (
+        {liveOffers.length === 0 ? (
           <Card>
             <EmptyState
               title="No offers right now"
@@ -211,8 +220,9 @@ function MechanicBoard() {
           </Card>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2">
-            {offers.map((offer) => {
+            {liveOffers.map((offer) => {
               const seconds = offer.secondsLeft ?? 0;
+              const rowBusy = responding.includes(offer.attemptId);
               return (
                 <Card key={offer.attemptId} className={cn(seconds < 15 && 'border-amber-300')}>
                   <CardContent className="space-y-3">
@@ -236,13 +246,13 @@ function MechanicBoard() {
                       ))}
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" loading={busy} onClick={() => void respond(offer.attemptId, 'accept')}>
+                      <Button size="sm" loading={rowBusy} onClick={() => void respond(offer.attemptId, 'accept')}>
                         Accept job
                       </Button>
                       <Button
                         size="sm"
                         variant="secondary"
-                        loading={busy}
+                        loading={rowBusy}
                         onClick={() => void respond(offer.attemptId, 'decline', 'Busy')}
                       >
                         Decline

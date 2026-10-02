@@ -18,6 +18,8 @@ export const hi: Record<TranslationKey, string> = {
   'nav.jobs': 'कार्य',
   'nav.earnings': 'कमाई',
   'nav.profile': 'प्रोफ़ाइल',
+  'nav.settings': 'सेटिंग्स',
+  'nav.track': 'रिक्वेस्ट ट्रैक करें',
   'nav.operations': 'ऑपरेशंस',
   'nav.admin': 'एडमिन',
   'nav.payments': 'भुगतान और निकासी',

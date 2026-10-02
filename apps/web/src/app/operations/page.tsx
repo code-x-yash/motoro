@@ -96,6 +96,7 @@ function OperationsConsole() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<OpsDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -150,14 +151,21 @@ function OperationsConsole() {
   const openDetail = async (id: string) => {
     setSelectedId(id);
     setDetailLoading(true);
+    setDetailError(null);
     try {
       setDetail(await apiGet<OpsDetail>(`/api/operations/emergencies/${id}`));
     } catch (err) {
-      setError(errorMessage(err));
+      setDetailError(errorMessage(err));
       setDetail(null);
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const closeDetail = () => {
+    setSelectedId(null);
+    setDetail(null);
+    setDetailError(null);
   };
 
   const act = async (action: string, body?: Record<string, unknown>) => {
@@ -202,6 +210,14 @@ function OperationsConsole() {
         })),
     [mapPoints],
   );
+
+  const mapsLink = useMemo(() => {
+    const point = mapPoints.find(
+      (item) => typeof item.latitude === 'number' && typeof item.longitude === 'number',
+    );
+    if (!point) return null;
+    return `https://www.google.com/maps/search/?api=1&query=${point.latitude},${point.longitude}`;
+  }, [mapPoints]);
 
   if (loading && !dashboard) return <LoadingState label="Connecting to command centre…" />;
 
@@ -326,7 +342,7 @@ function OperationsConsole() {
             <span className="text-xs text-slate-500">{markers.length} markers</span>
           </CardHeader>
           <CardContent>
-            <MapPanel markers={markers} height="h-[28rem]" />
+            <MapPanel markers={markers} height="h-[28rem]" mapsLink={mapsLink} />
           </CardContent>
         </Card>
       ) : null}
@@ -334,38 +350,42 @@ function OperationsConsole() {
       {tab === 'mechanics' ? (
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <Thead>
-                <Tr>
-                  <Th>Mechanic</Th>
-                  <Th>Status</Th>
-                  <Th>Verification</Th>
-                  <Th>Active jobs</Th>
-                  <Th>Location</Th>
-                </Tr>
-              </Thead>
-              <Tbody>
-                {mechanics.map((mechanic) => (
-                  <Tr key={mechanic.userId}>
-                    <Td className="font-medium text-slate-900">{mechanic.fullName}</Td>
-                    <Td>
-                      <Badge tone={mechanic.status === 'AVAILABLE' ? 'emerald' : 'slate'}>{mechanic.status}</Badge>
-                    </Td>
-                    <Td>
-                      <Badge tone={mechanic.verificationStatus === 'VERIFIED' ? 'emerald' : 'amber'}>
-                        {mechanic.verificationStatus}
-                      </Badge>
-                    </Td>
-                    <Td>{mechanic.activeJobs ?? 0}</Td>
-                    <Td>
-                      {mechanic.lastKnownLatitude ?? mechanic.latitude
-                        ? `${(mechanic.lastKnownLatitude ?? mechanic.latitude)?.toFixed(3)}, ${(mechanic.lastKnownLongitude ?? mechanic.longitude)?.toFixed(3)}`
-                        : '—'}
-                    </Td>
+            {mechanics.length === 0 ? (
+              <EmptyState title="No mechanics" description="No mechanics are registered yet." />
+            ) : (
+              <Table>
+                <Thead>
+                  <Tr>
+                    <Th>Mechanic</Th>
+                    <Th>Status</Th>
+                    <Th>Verification</Th>
+                    <Th>Active jobs</Th>
+                    <Th>Location</Th>
                   </Tr>
-                ))}
-              </Tbody>
-            </Table>
+                </Thead>
+                <Tbody>
+                  {mechanics.map((mechanic) => (
+                    <Tr key={mechanic.userId}>
+                      <Td className="font-medium text-slate-900">{mechanic.fullName}</Td>
+                      <Td>
+                        <Badge tone={mechanic.status === 'AVAILABLE' ? 'emerald' : 'slate'}>{mechanic.status}</Badge>
+                      </Td>
+                      <Td>
+                        <Badge tone={mechanic.verificationStatus === 'VERIFIED' ? 'emerald' : 'amber'}>
+                          {mechanic.verificationStatus}
+                        </Badge>
+                      </Td>
+                      <Td>{mechanic.activeJobs ?? 0}</Td>
+                      <Td>
+                        {mechanic.lastKnownLatitude ?? mechanic.latitude
+                          ? `${(mechanic.lastKnownLatitude ?? mechanic.latitude)?.toFixed(3)}, ${(mechanic.lastKnownLongitude ?? mechanic.longitude)?.toFixed(3)}`
+                          : '—'}
+                      </Td>
+                    </Tr>
+                  ))}
+                </Tbody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       ) : null}
@@ -403,17 +423,23 @@ function OperationsConsole() {
         </Card>
       ) : null}
 
-      <Modal
-        open={Boolean(selectedId)}
-        onClose={() => {
-          setSelectedId(null);
-          setDetail(null);
-        }}
-        title="Emergency override"
-        wide
-      >
-        {detailLoading || !detail ? (
-          <LoadingState />
+      <Modal open={Boolean(selectedId)} onClose={closeDetail} title="Emergency override" wide>
+        {detailLoading ? (
+          <LoadingState label="Loading request…" />
+        ) : detailError || !detail ? (
+          <div className="space-y-4">
+            <Alert tone="danger" title="Could not load this request">
+              {detailError ?? 'This request is no longer available.'}
+            </Alert>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={closeDetail}>
+                Close
+              </Button>
+              {selectedId ? (
+                <Button onClick={() => void openDetail(selectedId)}>Retry</Button>
+              ) : null}
+            </div>
+          </div>
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -434,7 +460,15 @@ function OperationsConsole() {
                 <p className="mt-2 text-xs text-slate-500">
                   {detail.request.address ?? `${detail.request.latitude.toFixed(4)}, ${detail.request.longitude.toFixed(4)}`}
                 </p>
-                <p className="text-xs text-slate-500">{detail.request.vehicleLabel ?? 'No vehicle'}</p>
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${detail.request.latitude},${detail.request.longitude}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-xs font-medium text-brand-700 hover:underline"
+                >
+                  Open in Google Maps
+                </a>
+                <p className="mt-2 text-xs text-slate-500">{detail.request.vehicleLabel ?? 'No vehicle'}</p>
               </div>
               <div className="rounded-lg border border-slate-100 p-3">
                 <p className="text-xs font-medium uppercase text-slate-400">Dispatch attempts</p>
@@ -471,7 +505,7 @@ function OperationsConsole() {
               onAssign={(mechanicUserId, mode) =>
                 act(mode === 'assign' ? 'assign' : 'reassign', { mechanicUserId })
               }
-              onEscalate={() => act('escalate')}
+              onEscalate={(reason) => act('escalate', { reason })}
               onNote={(note) => act('note', { note })}
               onCancel={(reason) => act('cancel', { reason })}
               requestId={detail.request.id}
@@ -495,7 +529,7 @@ function OpsActions({
   busy: boolean;
   mechanics: MechanicRow[];
   onAssign: (mechanicUserId: string, mode: 'assign' | 'reassign') => void;
-  onEscalate: () => void;
+  onEscalate: (reason: string) => void;
   onNote: (note: string) => void;
   onCancel: (reason: string) => void;
   requestId: string;
@@ -548,16 +582,34 @@ function OpsActions({
       </div>
 
       <div className="flex flex-wrap items-end gap-2">
-        <Field label="Escalate / cancel reason" className="flex-1">
-          <Input value={reason} onChange={(event) => setReason(event.target.value)} placeholder="No mechanic accepted within radius" />
+        <Field label="Escalation reason" className="flex-1">
+          <Input
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="No mechanic accepted within radius"
+          />
         </Field>
-        <Button variant="danger" disabled={!reason.trim() || busy} onClick={() => { onCancel(reason.trim()); setReason(''); }}>
+        <Button
+          variant="danger"
+          disabled={!reason.trim() || busy}
+          onClick={() => {
+            onCancel(reason.trim());
+            setReason('');
+          }}
+        >
           <ShieldAlert className="h-4 w-4" /> Cancel request
         </Button>
-        <Button variant="secondary" disabled={busy} onClick={onEscalate}>
+        <Button
+          variant="secondary"
+          disabled={!reason.trim() || busy}
+          onClick={() => {
+            onEscalate(reason.trim());
+            setReason('');
+          }}
+        >
           <Radio className="h-4 w-4" /> Escalate
         </Button>
-          <Link href={`/requests/detail?id=${requestId}`}>
+        <Link href={`/requests/detail?id=${requestId}`}>
           <Button variant="ghost">Full session</Button>
         </Link>
       </div>

@@ -3,8 +3,8 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { EmergencyRequestDto, Paginated } from '@rr/types';
-import { Card, CardContent, EmptyState, Input, LoadingState, StatusBadge, UrgencyBadge, cn } from '@rr/ui';
-import { History } from 'lucide-react';
+import { Alert, Button, Card, CardContent, EmptyState, Input, LoadingState, StatusBadge, UrgencyBadge, cn } from '@rr/ui';
+import { History, PlusCircle } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { apiGet } from '@/lib/api';
 import { formatDateTime, formatINR, titleCase } from '@/lib/format';
@@ -23,11 +23,17 @@ function HistoryContent() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
+    setError(null);
     void apiGet<Paginated<EmergencyRequestDto>>('/api/emergencies', { query: { limit: 50 } })
       .then((data) => setItems(data.items))
       .catch((err) => setError(err instanceof Error ? err.message : 'Could not load history.'))
       .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    load();
   }, []);
 
   const filtered = items.filter((item) => {
@@ -55,14 +61,38 @@ function HistoryContent() {
       />
 
       {loading ? <LoadingState /> : null}
-      {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+
+      {error ? (
+        <Alert
+          tone="danger"
+          action={
+            <Button size="sm" variant="secondary" onClick={load}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      ) : null}
 
       {!loading && !error && filtered.length === 0 ? (
         <Card>
           <EmptyState
-            title="No requests match"
-            description="Try another search, or start a new assistance request."
+            title={query.trim() ? 'No requests match' : 'No requests yet'}
+            description={
+              query.trim()
+                ? 'Try another search, or start a new assistance request.'
+                : 'Battery, flat tyre, fuel, accident — one tap starts a timed dispatch to nearby mechanics.'
+            }
             icon={<History className="h-10 w-10" />}
+            action={
+              <Link
+                href="/requests/new"
+                className="inline-flex h-10 items-center gap-2 rounded-lg bg-sun-400 px-4 text-sm font-semibold text-ink shadow-sm transition hover:-translate-y-0.5 hover:bg-sun-300"
+              >
+                <PlusCircle className="h-4 w-4" /> Request help
+              </Link>
+            }
           />
         </Card>
       ) : null}
@@ -70,7 +100,7 @@ function HistoryContent() {
       <div className="space-y-3">
         {filtered.map((item) => (
           <Link key={item.id} href={`/requests/detail?id=${item.id}`}>
-            <Card className="mb-3 transition-colors hover:border-brand-300">
+            <Card className="transition-colors hover:border-brand-300">
               <CardContent className="flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">

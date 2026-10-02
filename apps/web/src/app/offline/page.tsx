@@ -1,4 +1,6 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
+import { RetryButton } from './retry-button';
 
 export const metadata: Metadata = {
   title: 'Offline',
@@ -15,18 +17,13 @@ export default function OfflinePage() {
         you are back online.
       </p>
       <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
-        <a
+        <Link
           href="/"
           className="rounded-2xl bg-ink px-6 py-3 text-sm font-semibold text-white shadow-pop transition hover:opacity-90"
         >
-          Back to Motoro
-        </a>
-        <a
-          href="/offline"
-          className="rounded-2xl bg-sun-400 px-6 py-3 text-sm font-semibold text-ink shadow-card transition hover:bg-sun-300"
-        >
-          Try again
-        </a>
+          Back home
+        </Link>
+        <RetryButton />
       </div>
     </main>
   );

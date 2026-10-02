@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import type { DiagnosisDto, EmergencyRequestDto, JobDto, QuoteDto, TimelineEventDto } from '@rr/types';
@@ -11,6 +12,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  EmptyState,
   Field,
   Input,
   JOB_STATUS_TONE,
@@ -68,6 +70,7 @@ function Workbench() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [busyAction, setBusyAction] = useState<string | null>(null);
 
   const [otp, setOtp] = useState('');
   const [diagnosisNotes, setDiagnosisNotes] = useState('');
@@ -130,8 +133,9 @@ function Workbench() {
     return () => clearInterval(timer);
   }, [load, loadTimeline]);
 
-  const run = async (action: () => Promise<unknown>) => {
+  const run = async (action: () => Promise<unknown>, key: string) => {
     setBusy(true);
+    setBusyAction(key);
     setError(null);
     try {
       await action();
@@ -140,6 +144,7 @@ function Workbench() {
       setError(errorMessage(err));
     } finally {
       setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -179,37 +184,41 @@ function Workbench() {
       const pos = await currentLocation();
       if (pos) await sendLocation(pos);
       await apiPost(`/api/jobs/${jobId}/en-route`, pos ?? {});
-    });
+    }, 'en-route');
 
-  const goArrived = () => run(() => apiPost(`/api/jobs/${jobId}/arrived`, {}));
+  const goArrived = () => run(() => apiPost(`/api/jobs/${jobId}/arrived`, {}), 'arrived');
 
   const verifyOtp = async (event: FormEvent) => {
     event.preventDefault();
     setFields({});
-    await run(() => apiPost(`/api/jobs/${jobId}/verify`, { otp: otp.trim() })).then(() => setOtp(''));
+    await run(() => apiPost(`/api/jobs/${jobId}/verify`, { otp: otp.trim() }), 'verify').then(() => setOtp(''));
   };
 
   const submitDiagnosis = async (event: FormEvent) => {
     event.preventDefault();
     setFields({});
-    await run(() =>
-      apiPost(`/api/jobs/${jobId}/diagnosis`, {
-        notes: diagnosisNotes,
-        items: diagnosisItems
-          .filter((item) => item.label.trim())
-          .map((item) => ({
-            code: item.code.trim() || 'CHECK',
-            label: item.label.trim(),
-            result: item.result,
-            notes: item.notes.trim() || null,
-          })),
-      }),
+    await run(
+      () =>
+        apiPost(`/api/jobs/${jobId}/diagnosis`, {
+          notes: diagnosisNotes,
+          items: diagnosisItems
+            .filter((item) => item.label.trim())
+            .map((item) => ({
+              code: item.code.trim() || 'CHECK',
+              label: item.label.trim(),
+              result: item.result,
+              notes: item.notes.trim() || null,
+            })),
+        }),
+      'diagnosis',
     );
   };
 
   const submitQuote = async (event: FormEvent) => {
     event.preventDefault();
     setFields({});
+    setBusy(true);
+    setBusyAction('quote');
     try {
       await apiPost(`/api/jobs/${jobId}/quote`, {
         items: quoteItems
@@ -227,6 +236,9 @@ function Workbench() {
     } catch (err) {
       setFields(fieldErrors(err));
       setError(errorMessage(err));
+    } finally {
+      setBusy(false);
+      setBusyAction(null);
     }
   };
 
@@ -295,17 +307,29 @@ function Workbench() {
       ].filter((part): part is string => part !== null)
     : [];
   const quoteTotal = quote ? quote.subtotalCents + quote.taxCents - quote.discountCents : 0;
+  const draftSubtotalCents = Math.round(
+    quoteItems.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPriceRupees) || 0), 0) * 100,
+  );
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <Badge tone="blue">{request.reference}</Badge>
-        <StatusBadge status={job.status} map={JOB_STATUS_TONE} />
-        <UrgencyBadge urgency={request.urgency} />
-        <Badge>{titleCase(request.issueType)}</Badge>
-        <span className="ml-auto text-xs text-slate-500">
-          Request status: <strong>{request.status}</strong>
-        </span>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Link
+            href="/mechanic/jobs"
+            className="inline-flex items-center gap-1 text-xs font-medium text-brand-700 hover:underline"
+          >
+            Back to jobs
+          </Link>
+          <h1 className="page-title mt-1">{request.reference}</h1>
+          <p className="page-subtitle">Job workbench · {titleCase(request.issueType)}</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={job.status} map={JOB_STATUS_TONE} />
+          <UrgencyBadge urgency={request.urgency} />
+          <span className="text-xs text-slate-500">Request status</span>
+          <StatusBadge status={request.status} />
+        </div>
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -321,6 +345,7 @@ function Workbench() {
               <div className="flex flex-wrap gap-2">
                 <Button
                   disabled={!['ACCEPTED'].includes(job.status) || busy}
+                  loading={busyAction === 'en-route'}
                   onClick={() => {
                     window.open(directionsUrl, '_blank', 'noopener');
                     void goEnRoute();
@@ -331,6 +356,7 @@ function Workbench() {
                 <Button
                   variant="secondary"
                   disabled={!['EN_ROUTE'].includes(job.status) || busy}
+                  loading={busyAction === 'arrived'}
                   onClick={() => void goArrived()}
                 >
                   Mark arrived
@@ -338,14 +364,16 @@ function Workbench() {
                 <Button
                   variant="secondary"
                   disabled={!['QUOTE_APPROVED'].includes(job.status) || busy}
-                  onClick={() => void run(() => apiPost(`/api/jobs/${jobId}/start`, {}))}
+                  loading={busyAction === 'start'}
+                  onClick={() => void run(() => apiPost(`/api/jobs/${jobId}/start`, {}), 'start')}
                 >
                   <PlayCircle className="h-4 w-4" /> Start repair
                 </Button>
                 <Button
                   variant="success"
                   disabled={!['REPAIRING'].includes(job.status) || busy}
-                  onClick={() => void run(() => apiPost(`/api/jobs/${jobId}/complete`, {}))}
+                  loading={busyAction === 'complete'}
+                  onClick={() => void run(() => apiPost(`/api/jobs/${jobId}/complete`, {}), 'complete')}
                 >
                   <CheckCircle2 className="h-4 w-4" /> Mark complete
                 </Button>
@@ -370,7 +398,7 @@ function Workbench() {
                       inputMode="numeric"
                     />
                   </Field>
-                  <Button type="submit" loading={busy} disabled={otp.length !== 6}>
+                  <Button type="submit" loading={busyAction === 'verify'} disabled={otp.length !== 6}>
                     Verify arrival
                   </Button>
                   <p className="w-full text-xs text-amber-800">
@@ -449,6 +477,7 @@ function Workbench() {
                           <Button
                             variant="ghost"
                             size="sm"
+                            aria-label="Remove check"
                             onClick={() => setDiagnosisItems((prev) => prev.filter((_, i) => i !== index))}
                           >
                             ✕
@@ -470,7 +499,7 @@ function Workbench() {
                     >
                       Add check
                     </Button>
-                    <Button type="submit" loading={busy}>
+                    <Button type="submit" loading={busyAction === 'diagnosis'}>
                       Save diagnosis
                     </Button>
                   </div>
@@ -539,6 +568,7 @@ function Workbench() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          aria-label="Remove line"
                           onClick={() => setQuoteItems((prev) => prev.filter((_, i) => i !== index))}
                         >
                           ✕
@@ -559,14 +589,8 @@ function Workbench() {
                     >
                       Add line
                     </Button>
-                    <span className="text-xs text-slate-500">
-                      Subtotal ₹
-                      {quoteItems.reduce(
-                        (sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPriceRupees) || 0),
-                        0,
-                      )}
-                    </span>
-                    <Button type="submit" loading={busy} className="ml-auto">
+                    <span className="text-xs text-slate-500">Subtotal {formatINR(draftSubtotalCents)}</span>
+                    <Button type="submit" loading={busyAction === 'quote'} className="ml-auto">
                       <Package className="h-4 w-4" /> Send quote
                     </Button>
                   </div>
@@ -624,32 +648,40 @@ function Workbench() {
                   <input type="file" accept="image/*" className="hidden" onChange={uploadPhoto} disabled={uploading} />
                 </label>
               </div>
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {job.photos.map((photo) =>
-                  photo.url ? (
-                    <a
-                      key={photo.id}
-                      href={photo.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="group overflow-hidden rounded-lg border border-slate-100"
-                      title={photo.caption ?? photo.stage}
-                    >
-                      <img
-                        src={photo.url}
-                        alt={photo.caption ?? `${photo.stage} photo`}
-                        className="aspect-square w-full object-cover transition group-hover:opacity-85"
-                      />
-                      <p className="p-1 text-center text-[10px] font-medium text-slate-500">{photo.stage}</p>
-                    </a>
-                  ) : (
-                    <div key={photo.id} className="rounded-lg border border-slate-100 p-2 text-center">
-                      <Camera className="mx-auto h-5 w-5 text-slate-300" />
-                      <p className="mt-1 text-[10px] font-medium text-slate-500">{photo.stage}</p>
-                    </div>
-                  ),
-                )}
-              </div>
+              {job.photos.length === 0 ? (
+                <EmptyState
+                  title="No photos yet"
+                  description="Upload before and after photos as evidence for this job."
+                  className="py-6"
+                />
+              ) : (
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {job.photos.map((photo) =>
+                    photo.url ? (
+                      <a
+                        key={photo.id}
+                        href={photo.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="group overflow-hidden rounded-lg border border-slate-100"
+                        title={photo.caption ?? photo.stage}
+                      >
+                        <img
+                          src={photo.url}
+                          alt={photo.caption ?? `${photo.stage} photo`}
+                          className="aspect-square w-full object-cover transition group-hover:opacity-85"
+                        />
+                        <p className="p-1 text-center text-[10px] font-medium text-slate-500">{photo.stage}</p>
+                      </a>
+                    ) : (
+                      <div key={photo.id} className="rounded-lg border border-slate-100 p-2 text-center">
+                        <Camera className="mx-auto h-5 w-5 text-slate-300" />
+                        <p className="mt-1 text-[10px] font-medium text-slate-500">{photo.stage}</p>
+                      </div>
+                    ),
+                  )}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -705,15 +737,23 @@ function Workbench() {
               <CardTitle>Timeline</CardTitle>
             </CardHeader>
             <CardContent className="max-h-72 space-y-3 overflow-y-auto">
-              {[...timeline].reverse().slice(0, 20).map((event) => (
-                <div key={event.id} className="flex gap-2">
-                  <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
-                  <div>
-                    <p className="text-xs text-slate-700">{event.message}</p>
-                    <p className="text-[11px] text-slate-400">{formatDateTime(event.createdAt)}</p>
+              {timeline.length === 0 ? (
+                <EmptyState
+                  title="No activity yet"
+                  description="Status changes and notes appear here as the job progresses."
+                  className="py-6"
+                />
+              ) : (
+                [...timeline].reverse().slice(0, 20).map((event) => (
+                  <div key={event.id} className="flex gap-2">
+                    <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-brand-500" />
+                    <div>
+                      <p className="text-xs text-slate-700">{event.message}</p>
+                      <p className="text-[11px] text-slate-400">{formatDateTime(event.createdAt)}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </CardContent>
           </Card>
         </div>

@@ -3,11 +3,11 @@
 import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { BRAND } from '@rr/config';
 import { BadgeCheck, MapPin, Navigation, RefreshCw, Search, Star, Wrench } from 'lucide-react';
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle, LoadingState, StatusBadge, UrgencyBadge } from '@rr/ui';
 import { AppShell } from '@/components/app-shell';
 import { apiGet, errorMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth';
 import { formatDateTime, titleCase } from '@/lib/format';
 import { PROGRESS_STEPS, progressStepIndex } from '@/lib/progress';
 
@@ -42,6 +42,7 @@ const ACTIVE_STATUSES = new Set([
 
 function ReferenceForm({ onSubmit }: { onSubmit: (reference: string) => void }) {
   const [value, setValue] = useState('');
+  const { user } = useAuth();
   return (
     <Card className="animate-fade-up mx-auto max-w-md">
       <CardHeader>
@@ -70,6 +71,15 @@ function ReferenceForm({ onSubmit }: { onSubmit: (reference: string) => void }) 
             <Search className="h-4 w-4" /> Track
           </Button>
         </form>
+        {!user ? (
+          <p className="mt-4 text-center text-sm text-slate-500">
+            Have an account?{' '}
+            <Link href="/login" className="font-medium text-brand-700 hover:underline">
+              Sign in
+            </Link>{' '}
+            to see every request you have raised.
+          </p>
+        ) : null}
       </CardContent>
     </Card>
   );
@@ -77,6 +87,7 @@ function ReferenceForm({ onSubmit }: { onSubmit: (reference: string) => void }) 
 
 function TrackBody() {
   const router = useRouter();
+  const { user } = useAuth();
   const params = useSearchParams();
   const reference = (params.get('ref') ?? params.get('reference') ?? '').trim().toUpperCase();
   const [data, setData] = useState<TrackData | null>(null);
@@ -122,12 +133,18 @@ function TrackBody() {
           <CardTitle>We could not find that request</CardTitle>
           <span className="text-sm text-slate-500">{error ?? 'Check the code and try again.'}</span>
         </CardHeader>
-        <CardContent>
-          <Button variant="secondary" onClick={() => router.push('/track')}>
+        <CardContent className="flex flex-wrap items-center gap-3">
+          <Link
+            href="/track"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-4 text-sm font-medium text-slate-800 transition hover:bg-slate-50"
+          >
             Try another code
-          </Button>
-          <Link href="/" className="ml-3">
-            <Button variant="ghost">Go home</Button>
+          </Link>
+          <Link
+            href="/"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
+          >
+            Go home
           </Link>
         </CardContent>
       </Card>
@@ -224,12 +241,15 @@ function TrackBody() {
         </CardContent>
       </Card>
 
-      <div className="flex items-center justify-center gap-3 text-xs text-slate-400">
-        <span>© {new Date().getFullYear()} {BRAND.name}</span>
-        <Link href="/" className="font-medium text-brand-700 hover:underline">
-          Need help? Request assistance
-        </Link>
-      </div>
+      {!user ? (
+        <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center text-sm text-slate-500">
+          <span>Have an account?</span>
+          <Link href="/login" className="font-medium text-brand-700 hover:underline">
+            Sign in
+          </Link>
+          <span>to see every request you have raised.</span>
+        </div>
+      ) : null}
     </div>
   );
 }

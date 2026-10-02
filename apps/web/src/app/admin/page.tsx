@@ -7,7 +7,7 @@ import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptySt
 import { ShieldCheck, Users } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, formatINR } from '@/lib/format';
 
 interface AdminStats {
   users: { total: number; drivers: number; mechanics: number; workshops: number; towing: number };
@@ -122,7 +122,7 @@ function AdminHome() {
         <Stat label="Users" value={stats?.users.total ?? 0} hint={`${stats?.users.drivers ?? 0} drivers · ${stats?.users.mechanics ?? 0} mechanics`} />
         <Stat label="Requests" value={stats?.requests.total ?? 0} hint={`${stats?.requests.today ?? 0} today`} tone="blue" />
         <Stat label="Jobs completed" value={stats?.jobs.completed ?? 0} tone="emerald" />
-        <Stat label="Revenue" value={`₹${Math.round((stats?.revenueCents ?? 0) / 100).toLocaleString('en-IN')}`} tone="emerald" />
+        <Stat label="Revenue" value={formatINR(stats?.revenueCents ?? 0)} tone="emerald" />
         <Stat label="Pending verifications" value={stats?.pendingVerifications ?? 0} tone="amber" />
         <Stat label="Open disputes" value={stats?.openDisputes ?? 0} tone="rose" />
         <Stat label="Escalated" value={stats?.requests.escalated ?? 0} tone="rose" />
@@ -175,7 +175,7 @@ function AdminHome() {
                         <Button size="sm" loading={busy} onClick={() => void decide(mechanic.userId, 'VERIFIED')}>
                           Verify
                         </Button>
-                        <Button size="sm" variant="secondary" onClick={() => void decide(mechanic.userId, 'REJECTED')}>
+                        <Button size="sm" variant="secondary" loading={busy} onClick={() => void decide(mechanic.userId, 'REJECTED')}>
                           Reject
                         </Button>
                       </div>
@@ -197,7 +197,7 @@ function AdminHome() {
         </CardHeader>
         <CardContent className="space-y-2">
           {audit.length === 0 ? (
-            <p className="text-sm text-slate-500">No audit entries yet.</p>
+            <EmptyState title="No audit activity yet" description="Administrative actions are recorded here as they happen." />
           ) : (
             audit.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between gap-3 text-sm">

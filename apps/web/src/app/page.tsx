@@ -116,6 +116,13 @@ export default function LandingPage() {
               >
                 {t('nav.login')}
               </Link>
+              <Link
+                href="/track"
+                className="inline-flex h-12 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-brand-700 transition hover:text-brand-800"
+              >
+                <MapPin className="h-4 w-4" />
+                {t('nav.track')}
+              </Link>
             </div>
             <div className="mt-8 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs font-medium text-slate-500">
               <span className="inline-flex items-center gap-1.5">
@@ -381,8 +388,17 @@ export default function LandingPage() {
               <Link href="/register" className="transition hover:text-ink">
                 {t('nav.signup')}
               </Link>
+              <Link href="/track" className="transition hover:text-ink">
+                {t('nav.track')}
+              </Link>
               <Link href="/help" className="transition hover:text-ink">
                 {t('nav.help')}
+              </Link>
+              <Link href="/terms" className="transition hover:text-ink">
+                Terms
+              </Link>
+              <Link href="/privacy" className="transition hover:text-ink">
+                Privacy
               </Link>
               <a
                 href={`tel:${BRAND.supportPhone.replace(/\s+/g, '')}`}

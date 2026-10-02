@@ -16,6 +16,8 @@ export const en = {
   'nav.jobs': 'Jobs',
   'nav.earnings': 'Earnings',
   'nav.profile': 'Profile',
+  'nav.settings': 'Settings',
+  'nav.track': 'Track request',
   'nav.operations': 'Operations',
   'nav.admin': 'Admin',
   'nav.payments': 'Payments & payouts',

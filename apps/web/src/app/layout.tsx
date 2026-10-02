@@ -13,6 +13,20 @@ export const metadata: Metadata = {
     'Motoro dispatches the nearest verified mechanic, workshop or tow truck to your breakdown with live tracking, transparent quotes and 24×7 operations oversight.',
   manifest: '/manifest.webmanifest',
   applicationName: 'Motoro',
+  openGraph: {
+    type: 'website',
+    siteName: 'Motoro',
+    title: 'Motoro — 24×7 roadside assistance & mechanic dispatch',
+    description:
+      'Motoro dispatches the nearest verified mechanic, workshop or tow truck to your breakdown with live tracking, transparent quotes and 24×7 operations oversight.',
+    url: 'https://motoro-web.vercel.app',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Motoro — 24×7 roadside assistance & mechanic dispatch',
+    description:
+      'Nearest verified mechanic or tow truck dispatched to your breakdown, with live tracking and transparent quotes.',
+  },
   icons: {
     icon: '/icon.svg',
     apple: '/icon.svg',

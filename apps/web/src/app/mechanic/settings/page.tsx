@@ -40,6 +40,7 @@ function MechanicSettings() {
   const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [fields, setFields] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
 
@@ -82,6 +83,12 @@ function MechanicSettings() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
   const saveProfile = async (event: FormEvent) => {
     event.preventDefault();
     setBusy(true);
@@ -97,6 +104,7 @@ function MechanicSettings() {
           .filter(Boolean),
       });
       await load();
+      setNotice('Profile saved.');
     } catch (err) {
       setFields(fieldErrors(err));
       setError(errorMessage(err));
@@ -116,6 +124,7 @@ function MechanicSettings() {
         documentKey: documentKey.trim() || undefined,
       });
       await load();
+      setNotice('Verification submitted — an administrator will review it shortly.');
     } catch (err) {
       setFields(fieldErrors(err));
       setError(errorMessage(err));
@@ -162,6 +171,7 @@ function MechanicSettings() {
       });
       const data = await apiGet<{ items: AvailabilitySlot[] }>('/api/mechanics/me/availability');
       setSlots(data.items);
+      setNotice('Availability window added.');
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -188,6 +198,7 @@ function MechanicSettings() {
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
+      {notice ? <Alert tone="success">{notice}</Alert> : null}
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Card>
@@ -278,7 +289,12 @@ function MechanicSettings() {
                   className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700"
                 >
                   {DAYS[item.dayOfWeek]} {minutesToTime(item.startMinute)}–{minutesToTime(item.endMinute)}
-                  <button type="button" className="text-slate-400 hover:text-rose-600" onClick={() => void removeSlot(item.id)}>
+                  <button
+                    type="button"
+                    aria-label="Remove availability window"
+                    className="text-slate-400 hover:text-rose-600"
+                    onClick={() => void removeSlot(item.id)}
+                  >
                     ✕
                   </button>
                 </span>
