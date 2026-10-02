@@ -46,9 +46,6 @@ body {
     @apply animate-pulse rounded-md bg-slate-200/80;
   }
   /* Bright, app-like primitives used across marketing + product modules */
-  .section-eyebrow {
-    @apply inline-flex items-center gap-2 rounded-full bg-sun-300 px-3 py-1 text-[11px] font-bold uppercase tracking-widest text-ink;
-  }
   .section-title {
     @apply text-2xl font-bold tracking-tight text-ink sm:text-3xl;
   }
@@ -95,7 +92,7 @@ body {
   --d-text: #ebebef;
   --d-text-1: #c6c6cc;
   --d-text-2: #98989f;
-  --d-text-3: #6e6e76;
+  --d-text-3: #7e7e88;
   --d-hairline: rgba(255, 255, 255, 0.08);
   --d-hairline-strong: rgba(255, 255, 255, 0.14);
 }
@@ -405,4 +402,42 @@ body {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+.bg-sun-50,
+.bg-sun-100,
+.bg-sun-200,
+.bg-sun-300,
+.bg-sun-400,
+.bg-sun-500,
+.dark .bg-sun-50,
+.dark .bg-sun-100,
+.dark .bg-sun-200,
+.dark .bg-sun-300,
+.dark .bg-sun-400,
+.dark .bg-sun-500,
+.hover\:bg-sun-50:hover,
+.hover\:bg-sun-100:hover,
+.hover\:bg-sun-200:hover,
+.hover\:bg-sun-300:hover,
+.hover\:bg-sun-400:hover,
+.dark .hover\:bg-sun-50:hover,
+.dark .hover\:bg-sun-100:hover,
+.dark .hover\:bg-sun-200:hover,
+.dark .hover\:bg-sun-300:hover,
+.dark .hover\:bg-sun-400:hover,
+.bg-amber-400,
+.bg-amber-500,
+.dark .bg-amber-400,
+.dark .bg-amber-500,
+.hover\:bg-amber-400:hover,
+.hover\:bg-amber-500:hover {
+  color: #14161c;
+}
+
+.dark .bg-sun-400 .text-ink\/70,
+.dark .bg-sun-400.text-ink\/70,
+.dark .bg-sun-50 .text-ink\/70,
+.dark .bg-sun-50.text-ink\/70 {
+  color: rgba(20, 22, 28, 0.7);
 }

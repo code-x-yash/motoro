@@ -259,8 +259,7 @@ export default function TrackPage() {
     <AppShell allowAnonymous>
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="animate-fade-up text-center">
-          <span className="section-eyebrow">Live tracking</span>
-          <h1 className="page-title mt-3">Where is my mechanic?</h1>
+          <h1 className="page-title">Where is my mechanic?</h1>
           <p className="page-subtitle">Follow your roadside request in real time, no login needed.</p>
         </div>
         <Suspense fallback={<LoadingState label="Opening tracker…" />}>

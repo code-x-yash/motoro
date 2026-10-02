@@ -104,8 +104,7 @@ export default function PrivacyPage() {
     <AppShell allowAnonymous>
       <div className="mx-auto max-w-3xl space-y-6">
         <div className="animate-fade-up">
-          <span className="section-eyebrow">Legal</span>
-          <h1 className="page-title mt-3">Privacy policy</h1>
+          <h1 className="page-title">Privacy policy</h1>
           <p className="page-subtitle">
             Effective October 2026 · How {BRAND.name} collects, uses and protects your information.
           </p>

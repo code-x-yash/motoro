@@ -41,7 +41,7 @@ const TONE_CLASS: Record<string, string> = {
   brand: 'bg-brand-600 text-white',
   emerald: 'bg-emerald-600 text-white',
   rose: 'bg-rose-600 text-white',
-  amber: 'bg-amber-500 text-white',
+  amber: 'bg-amber-500 text-ink',
 };
 
 const OSRM_URL = 'https://router.project-osrm.org/route/v1/driving';

@@ -623,7 +623,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
 
       {awaitingArrivalOtp ? (
         <Card className="border border-sun-200 bg-sun-50">
-          <CardContent className="flex items-center gap-2 py-3 text-sm text-slate-700">
+          <CardContent className="flex items-center gap-2 py-3 text-sm text-ink">
             <Clock className="h-4 w-4 shrink-0 text-sun-700" />
             Your mechanic is here: the start code was sent to your phone and notifications.
           </CardContent>
@@ -1103,7 +1103,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
         {upiPhase === 'pay' && upiCheckout ? (
           <div className="space-y-4">
             <div className="rounded-2xl bg-canvas p-4 text-center">
-              <p className="text-xs uppercase tracking-wide text-ink-muted">Amount to pay</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Amount to pay</p>
               <p className="mt-1 text-3xl font-semibold">{formatINR(upiCheckout.amountCents)}</p>
             </div>
             <Button
@@ -1118,7 +1118,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
             {upiCheckout.vpa ? (
               <div className="flex items-center justify-between gap-2 rounded-xl border border-border p-3">
                 <div className="min-w-0">
-                  <p className="text-xs text-ink-muted">Or pay this VPA from any app</p>
+                  <p className="text-xs text-slate-500">Or pay this VPA from any app</p>
                   <p className="truncate font-mono text-sm font-medium">{upiCheckout.vpa}</p>
                 </div>
                 <Button
@@ -1134,7 +1134,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
                 </Button>
               </div>
             ) : null}
-            <ol className="list-decimal space-y-1 pl-5 text-sm text-ink-muted">
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-slate-500">
               <li>Pay the exact amount in any UPI app.</li>
               <li>Copy the UPI reference number from your app (optional).</li>
               <li>Tap &ldquo;I&rsquo;ve paid&rdquo; &mdash; we&rsquo;ll confirm with our team.</li>
@@ -1151,7 +1151,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
           <div className="space-y-3 py-2 text-center">
             <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-600" />
             <p className="font-medium">Waiting for confirmation&hellip;</p>
-            <p className="text-sm text-ink-muted">
+            <p className="text-sm text-slate-500">
               {upiNote ??
                 'Your payment was reported to our team. You will be notified as soon as it is confirmed.'}
             </p>

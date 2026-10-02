@@ -177,7 +177,7 @@ export default function LandingPage() {
                   <CheckCircle2 className="h-4 w-4 text-brand-600" />
                   {t('landing.helpCardOtp')}
                 </span>
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500">
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium text-ink">
                   <MapPin className="h-3.5 w-3.5" />
                   {t('landing.helpCardTrack')}
                 </span>
@@ -189,8 +189,7 @@ export default function LandingPage() {
 
       <section className="py-16 sm:py-24">
         <div className="page-container">
-          <span className="section-eyebrow">{t('landing.categoriesEyebrow')}</span>
-          <h2 className="section-title mt-4">{t('landing.categoriesTitle')}</h2>
+          <h2 className="section-title">{t('landing.categoriesTitle')}</h2>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 sm:text-base">
             {t('landing.categoriesSub')}
           </p>
@@ -223,8 +222,7 @@ export default function LandingPage() {
 
       <section id="how" className="scroll-mt-24 border-t border-slate-900/5 py-16 sm:py-24">
         <div className="page-container">
-          <span className="section-eyebrow">{t('landing.howEyebrow')}</span>
-          <h2 className="section-title mt-4">{t('landing.howTitle')}</h2>
+          <h2 className="section-title">{t('landing.howTitle')}</h2>
           <div className="mt-8 grid gap-5 md:grid-cols-3">
             {STEPS.map((step, index) => (
               <div key={step.title} className="card-bright p-6">
@@ -241,8 +239,7 @@ export default function LandingPage() {
 
       <section id="services" className="scroll-mt-24 border-t border-slate-900/5 py-16 sm:py-24">
         <div className="page-container">
-          <span className="section-eyebrow">{t('landing.servicesEyebrow')}</span>
-          <h2 className="section-title mt-4">{t('landing.servicesTitle')}</h2>
+          <h2 className="section-title">{t('landing.servicesTitle')}</h2>
           <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {SERVICES.map((service) => (
               <div key={service.title} className="card-bright flex flex-col p-6">
@@ -262,8 +259,7 @@ export default function LandingPage() {
 
       <section className="bg-sun-50 py-16 sm:py-24">
         <div className="page-container">
-          <span className="section-eyebrow">{t('landing.trustEyebrow')}</span>
-          <h2 className="section-title mt-4">{t('landing.trustTitle')}</h2>
+          <h2 className="section-title">{t('landing.trustTitle')}</h2>
           <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {STATS.map((stat) => (
               <div key={stat.label} className="card-bright p-5">
@@ -293,8 +289,7 @@ export default function LandingPage() {
       <section className="bg-ink text-white">
         <div className="page-container flex flex-col items-start gap-8 py-14 sm:flex-row sm:items-center sm:justify-between sm:py-16">
           <div className="max-w-2xl">
-            <span className="section-eyebrow">{t('landing.joinEyebrow')}</span>
-            <h2 className="mt-4 text-2xl font-bold tracking-tight sm:text-3xl">
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
               {t('landing.joinTitle')}
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-slate-300 sm:text-base">
@@ -314,8 +309,7 @@ export default function LandingPage() {
       <section className="py-16 sm:py-24">
         <div className="page-container">
           <div className="mx-auto max-w-3xl">
-            <span className="section-eyebrow">{t('faq.eyebrow')}</span>
-            <h2 className="section-title mt-4">{t('faq.title')}</h2>
+            <h2 className="section-title">{t('faq.title')}</h2>
             <div className="mt-8 space-y-3">
               {FAQS.map((item) => (
                 <details key={item.q} className="card-bright group">

@@ -141,8 +141,7 @@ export default function HelpPage() {
       <div className="mx-auto max-w-4xl space-y-6">
         <div className="animate-fade-up flex flex-wrap items-end justify-between gap-4">
           <div>
-            <span className="section-eyebrow">Help Center</span>
-            <h1 className="page-title mt-3">How can we help?</h1>
+            <h1 className="page-title">How can we help?</h1>
             <p className="page-subtitle">
               Answers about roadside help, tracking, quotes and safety, plus a human you can reach any hour.
             </p>
@@ -229,7 +228,7 @@ export default function HelpPage() {
                   </span>
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-ink">{group.title}</h3>
-                    <p className="truncate text-xs text-slate-500">{group.blurb}</p>
+                    <p className="truncate text-xs text-ink">{group.blurb}</p>
                   </div>
                 </div>
                 <div className="space-y-2 p-3">

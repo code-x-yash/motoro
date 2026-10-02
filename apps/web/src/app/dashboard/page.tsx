@@ -123,12 +123,6 @@ function DriverDashboard() {
   const firstName = user?.fullName?.trim().split(/\s+/)[0] ?? 'there';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-  const today = new Intl.DateTimeFormat('en-IN', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date());
   const cta = ctaFor(user?.role);
   const actions =
     user?.role === 'MECHANIC' ? [...QUICK_ACTIONS, ...MECHANIC_ACTIONS] : QUICK_ACTIONS;
@@ -137,8 +131,7 @@ function DriverDashboard() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <span className="section-eyebrow">{today}</span>
-          <h1 className="page-title mt-3">
+          <h1 className="page-title">
             {greeting}, {firstName}
           </h1>
           <p className="page-subtitle">

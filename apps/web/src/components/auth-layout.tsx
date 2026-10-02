@@ -82,7 +82,7 @@ export function AuthLayout({
           </div>
         </div>
 
-        <p className="relative mt-10 hidden text-xs text-slate-500 lg:block">
+        <p className="relative mt-10 hidden text-xs text-slate-400 lg:block">
           © {new Date().getFullYear()} {BRAND.name} · Help, wherever the road takes you.
         </p>
       </aside>
