@@ -106,7 +106,7 @@ const JOB_MESSAGES: Partial<Record<JobStatus, string>> = {
   VERIFIED: 'Arrival verified with OTP',
   DIAGNOSING: 'Diagnosis in progress',
   QUOTE_PENDING: 'Quote sent for approval',
-  QUOTE_APPROVED: 'Quote approved — starting repair',
+  QUOTE_APPROVED: 'Quote approved, starting repair',
   REPAIRING: 'Repair in progress',
   COMPLETED: 'Service completed',
 };
@@ -191,7 +191,7 @@ export async function transitionJob(
         await setRequestStatus(env, request, requestTarget, {
           actorRole: opts.actorRole ?? 'MECHANIC',
           actorUserId: opts.actorUserId ?? job.mechanic_user_id,
-          message: opts.message ?? JOB_MESSAGES[to] ?? `Job status: ${to}`,
+          message: opts.message ?? JOB_MESSAGES[to] ?? `Job update: ${to.replace(/_/g, ' ').toLowerCase().replace(/(^|\s)\w/g, (m) => m.toUpperCase())}`,
           data: { jobId: job.id },
         });
       } catch {
@@ -222,7 +222,7 @@ export async function transitionJob(
   await recordEvent(env, {
     requestId: job.request_id,
     type: `JOB_${to}`,
-    message: opts.message ?? JOB_MESSAGES[to] ?? `Job status: ${to}`,
+    message: opts.message ?? JOB_MESSAGES[to] ?? `Job update: ${to.replace(/_/g, ' ').toLowerCase().replace(/(^|\s)\w/g, (m) => m.toUpperCase())}`,
     actorRole: opts.actorRole ?? 'MECHANIC',
     actorUserId: opts.actorUserId ?? job.mechanic_user_id,
     data: { jobId: job.id, ...(opts.note ? { note: opts.note } : {}) },

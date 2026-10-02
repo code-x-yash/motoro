@@ -107,7 +107,7 @@ const STATUS_MESSAGES: Partial<Record<RequestStatus, string>> = {
   ARRIVED: 'Mechanic has arrived',
   DIAGNOSING: 'Diagnosis in progress',
   QUOTE_PENDING: 'Quote sent for your approval',
-  QUOTE_APPROVED: 'Quote approved — repair starting',
+  QUOTE_APPROVED: 'Quote approved, repair starting',
   REPAIRING: 'Repair in progress',
   COMPLETED: 'Service completed',
   PAYMENT_PENDING: 'Payment pending',
@@ -159,7 +159,7 @@ export async function setRequestStatus(
   await recordEvent(env, {
     requestId: request.id,
     type: `STATUS_${to}`,
-    message: opts.message ?? STATUS_MESSAGES[to] ?? `Status changed to ${to}`,
+    message: opts.message ?? STATUS_MESSAGES[to] ?? `Status updated to ${to.replace(/_/g, ' ').toLowerCase().replace(/(^|\s)\w/g, (m) => m.toUpperCase())}`,
     actorRole: opts.actorRole ?? 'SYSTEM',
     actorUserId: opts.actorUserId ?? null,
     data: opts.data ?? null,

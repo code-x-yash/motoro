@@ -6,7 +6,7 @@ export default function GlobalError({ reset }: { error: Error & { digest?: strin
       <p className="text-sm font-semibold text-red-600">Something went wrong</p>
       <h1 className="text-xl font-semibold text-slate-900">We hit a snag</h1>
       <p className="max-w-md text-sm text-slate-500">
-        An unexpected error occurred. Nothing you did — please try again, or head back home.
+        An unexpected error occurred. Nothing you did. Please try again, or head back home.
       </p>
       <div className="mt-2 flex items-center gap-3">
         <button

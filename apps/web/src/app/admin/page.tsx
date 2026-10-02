@@ -3,11 +3,11 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import type { AuditLogDto, Paginated } from '@rr/types';
-import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, LoadingState, Stat, Table, Tbody, Td, Th, Thead, Tr, cn } from '@rr/ui';
+import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, EmptyState, LoadingState, Stat, Table, Tbody, Td, Th, Thead, Tr } from '@rr/ui';
 import { ShieldCheck, Users } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
-import { formatDateTime, formatINR } from '@/lib/format';
+import { formatDateTime, formatINR, timeAgo, titleCase } from '@/lib/format';
 
 interface AdminStats {
   users: { total: number; drivers: number; mechanics: number; workshops: number; towing: number };
@@ -34,6 +34,67 @@ export default function AdminHomePage() {
       <AdminHome />
     </AppShell>
   );
+}
+
+const AUDIT_ACTOR_FALLBACK: Record<string, string> = {
+  DRIVER: 'A driver',
+  MECHANIC: 'A mechanic',
+  WORKSHOP: 'A workshop',
+  TOWING_PARTNER: 'A towing partner',
+  OPERATIONS: 'Operations',
+  ADMIN: 'Admin',
+  SYSTEM: 'System',
+};
+
+const AUDIT_ACTION_LABELS: Record<string, string> = {
+  LOGIN_SUCCESS: 'signed in',
+  LOGIN_FAILED: 'sign-in failed',
+  USER_REGISTERED: 'created an account',
+  PASSWORD_RESET: 'reset a password',
+  PROFILE_UPDATED: 'updated their profile',
+  VEHICLE_CREATED: 'added a vehicle',
+  NOTIFICATION_PREFERENCES_UPDATED: 'updated notification preferences',
+  VERIFICATION_SUBMITTED: 'submitted verification documents',
+  EMERGENCY_CREATED: 'raised a request',
+  EMERGENCY_CANCELLED: 'cancelled a request',
+  EMERGENCY_ESCALATED: 'escalated a request',
+  OPS_ASSIGN: 'assigned a request',
+  OPS_REASSIGN: 'reassigned a request',
+  OPS_CANCEL: 'cancelled an assignment',
+  OPS_ESCALATE: 'escalated a request',
+  OPS_NOTE: 'added an operations note',
+  DISPATCH_ACCEPTED: 'accepted a dispatch',
+  DISPATCH_DECLINED: 'declined a dispatch',
+  JOB_ARRIVED: 'arrived at a job',
+  JOB_COMPLETED: 'completed a job',
+  JOB_OTP_VERIFIED: 'verified arrival with OTP',
+  JOB_CANCELLED_REASSIGNED: 'cancelled a job for reassignment',
+  QUOTE_APPROVED: 'approved a quote',
+  PAYMENT_SETTLED: 'settled a payment',
+  PAYMENT_REFUNDED: 'issued a refund',
+  PAYOUT_REQUESTED: 'requested a payout',
+  PAYOUT_ACCOUNT_SAVED: 'saved a payout account',
+  DISPUTE_RAISED: 'raised a dispute',
+  DISPUTE_RESOLVED: 'resolved a dispute',
+  REVIEW_CREATED: 'left a review',
+  MECHANIC_STATUS_CHANGED: 'changed availability',
+  MECHANIC_VERIFICATION_DECISION: 'decided a verification',
+  WORKSHOP_VERIFICATION_DECISION: 'decided a verification',
+  TOWING_VERIFICATION_DECISION: 'decided a verification',
+  CONFIG_UPDATED: 'updated platform configuration',
+  PRICING_RULE_CREATED: 'added a pricing rule',
+  PRICING_RULE_UPDATED: 'updated a pricing rule',
+  PRICING_RULE_DELETED: 'deleted a pricing rule',
+  COUPON_CREATED: 'created a coupon',
+  COUPON_TOGGLED: 'toggled a coupon',
+  created: 'created a record',
+  decided: 'made a decision',
+};
+
+function auditEntryText(entry: AuditLogDto): { actor: string; action: string } {
+  const actor = entry.actorName ?? (entry.actorRole ? AUDIT_ACTOR_FALLBACK[entry.actorRole] ?? titleCase(entry.actorRole) : 'System');
+  const action = AUDIT_ACTION_LABELS[entry.action] ?? titleCase(entry.action).toLowerCase();
+  return { actor, action };
 }
 
 function AdminHome() {
@@ -199,16 +260,32 @@ function AdminHome() {
           {audit.length === 0 ? (
             <EmptyState title="No audit activity yet" description="Administrative actions are recorded here as they happen." />
           ) : (
-            audit.map((entry) => (
-              <div key={entry.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className={cn('truncate', 'text-slate-700')}>
-                  <strong>{entry.action}</strong>
-                  {entry.entityType ? ` · ${entry.entityType}` : ''}
-                  {entry.actorName ? ` · ${entry.actorName}` : ''}
+            audit.map((entry) => {
+              const { actor, action } = auditEntryText(entry);
+              const label = (
+                <span className="truncate text-slate-700">
+                  <strong className="font-semibold">{actor}</strong> {action}
+                  {entry.entityReference ? <span className="text-slate-400"> · {entry.entityReference}</span> : null}
                 </span>
-                <span className="shrink-0 text-xs text-slate-400">{formatDateTime(entry.createdAt)}</span>
-              </div>
-            ))
+              );
+              return (
+                <div key={entry.id} className="flex items-center justify-between gap-3 text-sm">
+                  {entry.entityType === 'emergency_request' && entry.entityId ? (
+                    <Link
+                      href={`/requests/detail?id=${entry.entityId}`}
+                      className="min-w-0 flex-1 truncate transition hover:text-brand-700"
+                    >
+                      {label}
+                    </Link>
+                  ) : (
+                    <span className="min-w-0 flex-1 truncate">{label}</span>
+                  )}
+                  <span className="shrink-0 text-xs text-slate-400" title={formatDateTime(entry.createdAt)}>
+                    {timeAgo(entry.createdAt)}
+                  </span>
+                </div>
+              );
+            })
           )}
         </CardContent>
       </Card>

@@ -500,6 +500,7 @@ export interface AuditLogDto {
   action: string;
   entityType: string | null;
   entityId: string | null;
+  entityReference: string | null;
   data: Record<string, unknown> | null;
   requestId: string | null;
   createdAt: string;

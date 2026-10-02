@@ -29,10 +29,10 @@ async function latestRequestId(): Promise<string | null> {
 }
 
 const URGENCIES = [
-  { value: 'LOW', label: 'Low — can wait a bit' },
-  { value: 'NORMAL', label: 'Normal — standard dispatch' },
-  { value: 'HIGH', label: 'High — stranded / unsafe' },
-  { value: 'CRITICAL', label: 'Critical — accident or danger' },
+  { value: 'LOW', label: 'Low: can wait a bit' },
+  { value: 'NORMAL', label: 'Normal: standard dispatch' },
+  { value: 'HIGH', label: 'High: stranded / unsafe' },
+  { value: 'CRITICAL', label: 'Critical: accident or danger' },
 ];
 
 const ISSUE_LABELS: Record<IssueType, string> = {
@@ -201,7 +201,7 @@ function NewRequestForm() {
     const longitude = Number(location.longitude);
     const accuracy = Number.isFinite(Number(location.accuracy)) ? Number(location.accuracy) : 0;
     if (!Number.isFinite(latitude) || !Number.isFinite(longitude) || Math.abs(latitude) > 90 || Math.abs(longitude) > 180) {
-      setError('Location unavailable — try again');
+      setError('Location unavailable. Try again.');
       return;
     }
     setBusy(true);
@@ -230,7 +230,7 @@ function NewRequestForm() {
       const created = await apiPost<{ id?: string; request?: { id: string } }>('/api/emergencies', payload);
       const createdId = created.request?.id ?? created.id;
       if (!createdId) {
-        throw new Error('Your request was created but could not be opened — check your history.');
+        throw new Error('Your request was created but could not be opened. Check your history.');
       }
       router.replace(`/requests/detail?id=${createdId}`);
     } catch (err) {
@@ -251,7 +251,7 @@ function NewRequestForm() {
     <div className="mx-auto max-w-3xl space-y-5">
       <div>
         <h1 className="page-title">Request help</h1>
-        <p className="page-subtitle">Tell us what happened — dispatch starts the moment you submit.</p>
+        <p className="page-subtitle">Tell us what happened: dispatch starts the moment you submit.</p>
       </div>
 
       {error ? <Alert tone="danger">{error}</Alert> : null}
@@ -336,7 +336,7 @@ function NewRequestForm() {
                     title="No vehicles in your garage"
                     description={
                       vehiclesError
-                        ? 'Your garage could not be loaded — you can still request help without a vehicle.'
+                        ? 'Your garage could not be loaded. You can still request help without a vehicle.'
                         : 'Add your car, bike or scooter so dispatch knows what is stranded.'
                     }
                     action={
@@ -361,7 +361,7 @@ function NewRequestForm() {
               />
             </Field>
 
-            <Field label="Photos (optional)" htmlFor="photos" hint="Up to 5 images — they help the mechanic arrive prepared.">
+            <Field label="Photos (optional)" htmlFor="photos" hint="Up to 5 images: they help the mechanic arrive prepared.">
               <div className="flex flex-wrap items-center gap-2">
                 <label
                   htmlFor="photos"
@@ -481,7 +481,7 @@ function NewRequestForm() {
             {isAccident ? (
               <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
                 <p className="text-sm font-semibold text-rose-800">Accident mode</p>
-                <p className="text-xs text-rose-700">Select everything that applies — this changes who we dispatch.</p>
+                <p className="text-xs text-rose-700">Select everything that applies: this changes who we dispatch.</p>
                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
                   {(Object.keys(accident) as (keyof AccidentFlags)[]).map((key) => (
                     <Checkbox

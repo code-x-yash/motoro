@@ -479,7 +479,7 @@ export async function finalizePaid(
   await recordEvent(env, {
     requestId: request.id,
     type: 'PAYMENT_COMPLETED',
-    message: `Payment completed — ₹${Math.round(totalCents / 100)}`,
+    message: `Payment of ₹${Math.round(totalCents / 100)} received`,
     data: { paymentId, totalCents, payoutCents: payout.payoutCents },
   });
 

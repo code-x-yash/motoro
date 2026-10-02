@@ -12,6 +12,7 @@ import { apiGet } from '@/lib/api';
 import { useRealtime } from '@/lib/realtime';
 import { Avatar, cn } from '@rr/ui';
 import { NAV_BY_ROLE } from './nav-items';
+import { ThemeToggle } from './theme-toggle';
 import type { Role } from '@rr/types';
 
 function LanguageToggle() {
@@ -120,6 +121,7 @@ export function AppShell({
                 {t('nav.help')}
               </Link>
               <LanguageToggle />
+              <ThemeToggle />
               <Link
                 href="/login"
                 className="inline-flex h-9 items-center rounded-lg bg-brand-600 px-4 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700"
@@ -239,6 +241,7 @@ export function AppShell({
                 </Link>
               ) : null}
               <LanguageToggle />
+              <ThemeToggle />
               <Link
                 href="/notifications"
                 className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"

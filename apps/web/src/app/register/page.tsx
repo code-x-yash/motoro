@@ -142,7 +142,7 @@ function RegisterForm() {
   return (
     <AuthLayout
       headline="Join the network that keeps the road moving."
-      blurb="One account for roadside requests, job dispatch, workshop bookings and towing — pick how you'll use Motoro below."
+      blurb="One account for roadside requests, job dispatch, workshop bookings and towing: pick how you'll use Motoro below."
       footer={
         <>
           Already have an account?{' '}
@@ -180,7 +180,7 @@ function RegisterForm() {
               {smsUnavailable ? (
                 <Alert tone="info" className="mb-4" title="Password signup">
                   SMS verification isn&apos;t working on this deployment right now. Create
-                  your account with your password below — it will go back to phone codes
+                  your account with your password below. It will go back to phone codes
                   automatically once SMS is available.
                 </Alert>
               ) : null}
@@ -257,7 +257,7 @@ function RegisterForm() {
                   error={fields.phone}
                   hint={
                     smsUnavailable
-                      ? 'Stored for your profile — SMS codes are not active yet.'
+                      ? 'Stored for your profile. SMS codes are not active yet.'
                       : "We'll text a 6-digit code to verify it."
                   }
                 >

@@ -554,7 +554,7 @@ export async function startDispatch(env: Env, request: RequestRow): Promise<Offe
   await recordEvent(env, {
     requestId: fresh.id,
     type: 'DISPATCH_STARTED',
-    message: 'Location confirmed — starting dispatch',
+    message: 'Location confirmed, starting dispatch',
     data: { latitude: fresh.latitude, longitude: fresh.longitude },
   });
 
@@ -892,7 +892,7 @@ export async function reassignRequest(
     userId: request.driver_user_id,
     type: 'MECHANIC_REASSIGNED',
     title: 'Finding you a new mechanic',
-    body: 'Your mechanic could not continue. We are assigning another one right now — your request stays open.',
+    body: 'Your mechanic could not continue. We are assigning another one right now, your request stays open.',
     data: { requestId, reason: opts.reason },
     channels: ['SMS'],
     requestId,
@@ -962,7 +962,7 @@ export async function sweepStalledJobs(env: Env): Promise<number> {
       await recordEvent(env, {
         requestId: job.request_id,
         type: 'MECHANIC_STALLED',
-        message: 'Mechanic has not moved towards you — escalating',
+        message: 'Mechanic has not moved towards you, escalating',
         data: { elapsedSeconds },
       });
       await notify(env, {

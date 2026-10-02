@@ -82,7 +82,7 @@ function HistoryContent() {
             description={
               query.trim()
                 ? 'Try another search, or start a new assistance request.'
-                : 'Battery, flat tyre, fuel, accident — one tap starts a timed dispatch to nearby mechanics.'
+                : 'Battery, flat tyre, fuel, accident: one tap starts a timed dispatch to nearby mechanics.'
             }
             icon={<History className="h-10 w-10" />}
             action={
@@ -115,7 +115,7 @@ function HistoryContent() {
                 </div>
                 <div className="text-right">
                   <p className="text-sm font-semibold tabular-nums text-slate-900">
-                    {item.totalAmountCents ? formatINR(item.totalAmountCents) : '—'}
+                    {item.totalAmountCents ? formatINR(item.totalAmountCents) : 'None'}
                   </p>
                   <p className={cn('text-xs', item.rating ? 'text-amber-500' : 'text-slate-400')}>
                     {item.rating ? `★ ${item.rating}` : 'Not rated'}

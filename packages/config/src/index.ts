@@ -107,6 +107,20 @@ export const ISSUE_TYPES = [
 
 export type IssueType = (typeof ISSUE_TYPES)[number];
 
+/** Human-readable labels for issue types (shared by web + worker messages). */
+export const ISSUE_LABELS: Record<IssueType, string> = {
+  BATTERY: 'Flat battery / jump start',
+  FLAT_TYRE: 'Flat tyre',
+  OUT_OF_FUEL: 'Out of fuel',
+  ENGINE_PROBLEM: 'Engine problem',
+  ELECTRICAL_PROBLEM: 'Electrical problem',
+  OVERHEATING: 'Overheating',
+  LOCKOUT: 'Keys locked in',
+  ACCIDENT: 'Accident',
+  GENERAL_BREAKDOWN: 'General breakdown',
+  DONT_KNOW: "Not sure what's wrong",
+};
+
 export const ISSUE_REQUIRED_SKILLS: Record<IssueType, string[]> = {
   BATTERY: ['battery', 'electrical'],
   FLAT_TYRE: ['tyre'],

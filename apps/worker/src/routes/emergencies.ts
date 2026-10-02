@@ -35,6 +35,7 @@ import { applyCoupon } from '../lib/coupons';
 import { getConfig } from '../lib/config';
 import { requirementsForIssue } from '../lib/categories';
 import { ensureInvoicePdf } from '../lib/invoice-pdf';
+import { ISSUE_LABELS } from '@rr/config';
 import { enforceRateLimit } from '../lib/rate-limit';
 import { broadcast, requestRoom } from '../lib/realtime';
 
@@ -155,7 +156,7 @@ routes.post('/', async (c) => {
   await recordEvent(c.env, {
     requestId: id,
     type: 'REQUEST_CREATED',
-    message: `Emergency request created (${input.issueType.replace(/_/g, ' ')})`,
+    message: `New request: ${ISSUE_LABELS[input.issueType] ?? input.issueType.replace(/_/g, ' ').toLowerCase()}`,
     actorRole: user.role,
     actorUserId: user.id,
     data: { channel: input.channel, urgency: effectiveUrgency, accident: isAccident, towing: wantsTowing },
@@ -814,7 +815,7 @@ routes.post('/:id/payment/confirm', async (c) => {
       userId: reviewer.id,
       type: 'PAYMENT_TO_CONFIRM',
       title: 'UPI payment to confirm',
-      body: `₹${amount} claimed for ${request.reference}${utr ? ` (ref ${utr})` : ''} — verify the bank credit and settle.`,
+      body: `₹${amount} claimed for ${request.reference}${utr ? ` (ref ${utr})` : ''}. Verify the bank credit and settle.`,
       data: { requestId: request.id, paymentId: payment.id, utr },
       requestId: request.id,
     }).catch(() => undefined);

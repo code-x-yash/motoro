@@ -128,10 +128,10 @@ function AdminUsers() {
                       </p>
                     </Td>
                     <Td>
-                      <Badge tone="blue">{user.role}</Badge>
+                      <Badge tone="blue">{titleCase(user.role)}</Badge>
                     </Td>
                     <Td>
-                      <Badge tone={user.status === 'ACTIVE' ? 'emerald' : 'rose'}>{user.status}</Badge>
+                      <Badge tone={user.status === 'ACTIVE' ? 'emerald' : 'rose'}>{titleCase(user.status)}</Badge>
                     </Td>
                     <Td>{formatDateTime(user.createdAt)}</Td>
                     <Td>{user.lastLoginAt ? formatDateTime(user.lastLoginAt) : 'Never'}</Td>
@@ -194,7 +194,7 @@ function AdminUsers() {
           <div className="divide-y divide-slate-100">
             <KeyValue label="Name" value={viewTarget.fullName} />
             <KeyValue label="Email" value={viewTarget.email} />
-            <KeyValue label="Phone" value={viewTarget.phone ?? '—'} />
+            <KeyValue label="Phone" value={viewTarget.phone ?? 'None'} />
             <KeyValue label="Role" value={titleCase(viewTarget.role)} />
             <KeyValue
               label="Status"

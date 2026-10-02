@@ -62,7 +62,7 @@ export default function ForgotPasswordPage() {
         (err.code === 'SMS_NOT_CONFIGURED' || err.code === 'SMS_SEND_FAILED')
       ) {
         setPhoneError(
-          "SMS codes aren't working on this deployment right now — please try again in a few minutes.",
+          "SMS codes aren't working on this deployment right now. Please try again in a few minutes.",
         );
       } else {
         setPhoneError(errorMessage(err));
@@ -122,7 +122,7 @@ export default function ForgotPasswordPage() {
           Forgot your password?
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Two steps — verify your mobile number, then set a new password.
+          Two steps: verify your mobile number, then set a new password.
         </p>
 
         <Card className="mt-5">
@@ -136,7 +136,7 @@ export default function ForgotPasswordPage() {
                 ) : null}
                 <form onSubmit={submitPhone} className="space-y-4">
                   <p className="text-sm text-slate-500">
-                    Enter your registered mobile number — we'll text a 6-digit code.
+                    Enter your registered mobile number, and we'll text a 6-digit code.
                   </p>
                   <Field label="Mobile number" htmlFor="phone" error={phoneFields.phone}>
                     <Input
@@ -204,7 +204,7 @@ export default function ForgotPasswordPage() {
                       label="Account email"
                       htmlFor="accountEmail"
                       error={phoneFields.email}
-                      hint="This number has multiple accounts — pick one by email."
+                      hint="This number has multiple accounts. Pick one by email."
                     >
                       <Input
                         id="accountEmail"

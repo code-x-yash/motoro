@@ -23,7 +23,7 @@ import {
 } from '@rr/ui';
 import { AppShell } from '@/components/app-shell';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
-import { formatDateTime, formatINR } from '@/lib/format';
+import { formatDateTime, formatINR, titleCase } from '@/lib/format';
 
 interface AdminPayment {
   id: string;
@@ -222,18 +222,18 @@ function AdminPayments() {
                     <Td className="text-xs text-slate-600">
                       {payout.account ? (
                         <>
-                          {payout.account.accountHolder ?? '—'}
+                          {payout.account.accountHolder ?? 'None'}
                           <br />
-                          {payout.account.accountNumber ?? '—'} · {payout.account.ifsc ?? '—'}
+                          {payout.account.accountNumber ?? 'None'} · {payout.account.ifsc ?? 'None'}
                         </>
                       ) : (
-                        '—'
+                        'None'
                       )}
                     </Td>
                     <Td>{formatDateTime(payout.createdAt)}</Td>
                     <Td className="font-semibold tabular-nums">{formatINR(payout.amountCents)}</Td>
                     <Td>
-                      <Badge tone={PAYOUT_TONE[payout.status]}>{payout.status}</Badge>
+                      <Badge tone={PAYOUT_TONE[payout.status]}>{titleCase(payout.status)}</Badge>
                       {payout.decidedAt ? (
                         <div className="mt-0.5 text-xs text-slate-400">{formatDateTime(payout.decidedAt)}</div>
                       ) : null}
@@ -254,7 +254,7 @@ function AdminPayments() {
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-xs text-slate-400">—</span>
+                        <span className="text-xs text-slate-400">None</span>
                       )}
                     </Td>
                   </Tr>
@@ -292,8 +292,8 @@ function AdminPayments() {
                     <Td>{payment.driverName}</Td>
                     <Td>
                       <Badge>
-                        {payment.provider}
-                        {payment.method ? ` · ${payment.method}` : ''}
+                        {titleCase(payment.provider)}
+                        {payment.method ? ` · ${titleCase(payment.method)}` : ''}
                       </Badge>
                       {payment.couponCode ? (
                         <div className="mt-0.5 text-xs text-slate-500">Coupon {payment.couponCode}</div>
@@ -306,7 +306,7 @@ function AdminPayments() {
                     </Td>
                     <Td className="font-semibold tabular-nums">{formatINR(payment.amountCents)}</Td>
                     <Td>
-                      <Badge tone={PAYMENT_TONE[payment.status] ?? 'slate'}>{payment.status}</Badge>
+                      <Badge tone={PAYMENT_TONE[payment.status] ?? 'slate'}>{titleCase(payment.status)}</Badge>
                       {(payment.refundedCents ?? 0) > 0 ? (
                         <div className="mt-0.5 text-xs text-rose-600">
                           {formatINR(payment.refundedCents ?? 0)} refunded
@@ -349,10 +349,10 @@ function AdminPayments() {
                           </Button>
                         ) : payment.provider === 'upi' ? (
                           <span className="text-xs text-slate-400" title="UPI refunds are sent from your bank/UPI app">
-                            —
+                            None
                           </span>
                         ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                          <span className="text-xs text-slate-400">None</span>
                         )}
                       </div>
                     </Td>

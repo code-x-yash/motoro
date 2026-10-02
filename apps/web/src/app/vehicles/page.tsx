@@ -18,12 +18,13 @@ import {
 import { Car, Plus, Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { apiDelete, apiGet, apiPatch, apiPost, errorMessage, fieldErrors } from '@/lib/api';
+import { titleCase } from '@/lib/format';
 
 const FUEL_TYPES: FuelType[] = ['PETROL', 'DIESEL', 'CNG', 'ELECTRIC', 'HYBRID'];
 const VEHICLE_TYPES: VehicleType[] = ['TWO_WHEELER', 'CAR', 'SUV', 'SCOOTER', 'COMMERCIAL', 'EV'];
 
 function formatDate(value: string | null | undefined): string {
-  if (!value) return '—';
+  if (!value) return 'None';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -165,7 +166,7 @@ function VehiclesContent() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Vehicles</h1>
-          <p className="page-subtitle">Your garage — prefill requests and dispatch with the right parts.</p>
+          <p className="page-subtitle">Your garage: prefill requests and dispatch with the right parts.</p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4" /> Add vehicle
@@ -197,11 +198,11 @@ function VehiclesContent() {
                       {vehicle.variant ? ` ${vehicle.variant}` : ''}
                     </p>
                     <p className="text-xs text-slate-500">
-                      {vehicle.registrationNumber} · {vehicle.fuelType} · {vehicle.vehicleType}
+                      {vehicle.registrationNumber} · {titleCase(vehicle.fuelType)} · {titleCase(vehicle.vehicleType)}
                     </p>
                   </div>
                   <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">
-                    {vehicle.year ?? '—'}
+                    {vehicle.year ?? 'None'}
                   </span>
                 </div>
                 <div className="flex flex-wrap gap-3 text-xs text-slate-500">

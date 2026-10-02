@@ -208,7 +208,7 @@ function TrackBody() {
             </ol>
           ) : (
             <p className="text-sm font-medium text-ink">
-              {isDone ? 'This request is complete — thank you!' : titleCase(tracking.status)}
+              {isDone ? 'This request is complete. Thank you!' : titleCase(tracking.status)}
             </p>
           )}
 
@@ -261,7 +261,7 @@ export default function TrackPage() {
         <div className="animate-fade-up text-center">
           <span className="section-eyebrow">Live tracking</span>
           <h1 className="page-title mt-3">Where is my mechanic?</h1>
-          <p className="page-subtitle">Follow your roadside request in real time — no login needed.</p>
+          <p className="page-subtitle">Follow your roadside request in real time, no login needed.</p>
         </div>
         <Suspense fallback={<LoadingState label="Opening tracker…" />}>
           <TrackBody />

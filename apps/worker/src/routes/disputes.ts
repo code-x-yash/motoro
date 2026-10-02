@@ -78,7 +78,7 @@ routes.post('/', async (c) => {
   await recordEvent(c.env, {
     requestId: request.id,
     type: 'DISPUTE_RAISED',
-    message: `Dispute raised (${input.category.replace(/_/g, ' ')}): ${input.reason.slice(0, 120)}`,
+    message: `Dispute raised (${input.category.replace(/_/g, ' ').toLowerCase()}): ${input.reason.slice(0, 120)}`,
     actorRole: user.role,
     actorUserId: user.id,
     data: { disputeId: id, category: input.category },

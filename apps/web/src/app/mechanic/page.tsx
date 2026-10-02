@@ -169,7 +169,7 @@ function MechanicBoard() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="page-title">Dispatch board</h1>
-          <p className="page-subtitle">Incoming offers expire on a timer — respond fast to stay reliable.</p>
+          <p className="page-subtitle">Incoming offers expire on a timer: respond fast to stay reliable.</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={cn('h-2.5 w-2.5 rounded-full', online ? 'bg-emerald-500' : 'bg-slate-300')} />

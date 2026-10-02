@@ -127,7 +127,7 @@ function PricingAdmin() {
             {rules.length === 0 ? (
               <EmptyState
                 title="No pricing rules yet"
-                description="Add the first rule below — base fee, per km rate or surge."
+                description="Add the first rule below: base fee, per km rate or surge."
               />
             ) : (
               <Table>
@@ -181,7 +181,7 @@ function PricingAdmin() {
                 hint={
                   form.type === 'PERCENT'
                     ? 'Percent of the order total.'
-                    : `Rupees — stored as ${formatINR(draftCents)} (${draftCents} paise).`
+                    : `Rupees, stored as ${formatINR(draftCents)} (${draftCents} paise).`
                 }
               >
                 <Input type="number" min={0} step={1} value={form.amount} onChange={(event) => setForm((prev) => ({ ...prev, amount: event.target.value }))} required />
@@ -215,7 +215,7 @@ function PricingAdmin() {
             {config.length === 0 ? (
               <EmptyState
                 title="No configuration rows"
-                description="Platform settings are seeded automatically — reload the page if this persists."
+                description="Platform settings are seeded automatically. Reload the page if this persists."
               />
             ) : (
               config.map((item) => (

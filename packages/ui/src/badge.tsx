@@ -92,6 +92,14 @@ export const URGENCY_TONE: Record<string, BadgeTone> = {
   CRITICAL: 'rose',
 };
 
+function humanize(value: string): string {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export function StatusBadge({
   status,
   map = REQUEST_STATUS_TONE,
@@ -103,7 +111,7 @@ export function StatusBadge({
 }) {
   return (
     <Badge tone={map[status] ?? 'slate'} className={className}>
-      {status.replace(/_/g, ' ')}
+      {humanize(status)}
     </Badge>
   );
 }
@@ -111,7 +119,7 @@ export function StatusBadge({
 export function UrgencyBadge({ urgency, className }: { urgency: string; className?: string }) {
   return (
     <Badge tone={URGENCY_TONE[urgency] ?? 'slate'} className={className} dot>
-      {urgency}
+      {humanize(urgency)}
     </Badge>
   );
 }

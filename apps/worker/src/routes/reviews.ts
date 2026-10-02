@@ -113,7 +113,7 @@ routes.post('/', async (c) => {
     userId: revieweeUserId,
     type: 'REVIEW_RECEIVED',
     title: 'You received a review',
-    body: `${input.overall}/5 — ${input.comment ?? 'Thanks for your feedback!'}`,
+    body: `${input.overall}/5 · ${input.comment ?? 'Thanks for your feedback!'}`,
     data: { requestId: request.id, reviewId: id },
     requestId: request.id,
   });

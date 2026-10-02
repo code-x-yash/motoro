@@ -21,7 +21,7 @@ import { Trash2 } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { apiDelete, apiGet, apiPatch, apiPost, fieldErrors } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, titleCase } from '@/lib/format';
 
 export default function ProfilePage() {
   return (
@@ -155,11 +155,11 @@ function ProfileContent() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge tone="blue">{user.role}</Badge>
-            <Badge tone={user.status === 'ACTIVE' ? 'emerald' : 'rose'}>{user.status}</Badge>
+            <Badge tone="blue">{titleCase(user.role)}</Badge>
+            <Badge tone={user.status === 'ACTIVE' ? 'emerald' : 'rose'}>{titleCase(user.status)}</Badge>
             {profile && 'verificationStatus' in profile ? (
               <Badge tone={profile.verificationStatus === 'VERIFIED' ? 'emerald' : 'amber'}>
-                {profile.verificationStatus}
+                {profile.verificationStatus ? titleCase(profile.verificationStatus) : 'Unknown'}
               </Badge>
             ) : null}
           </div>
@@ -170,7 +170,7 @@ function ProfileContent() {
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Phone</dt>
-              <dd className="font-medium text-slate-700">{user.phone ?? '—'}</dd>
+              <dd className="font-medium text-slate-700">{user.phone ?? 'None'}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Email verified</dt>

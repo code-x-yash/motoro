@@ -42,7 +42,7 @@ function ResetForm() {
   return (
     <AuthLayout
       headline="Pick a fresh password and you're back on the road."
-      blurb="Reset links are single-use and expire in one hour — set a new password and log in."
+      blurb="Reset links are single-use and expire in one hour. Set a new password and log in."
       footer={
         <>
           Remembered it?{' '}
@@ -65,7 +65,7 @@ function ResetForm() {
               <div>
                 <p className="text-base font-semibold text-ink">Password updated</p>
                 <p className="mt-1 text-sm text-slate-500">
-                  For safety we signed you out on every device — log in with your new
+                  For safety we signed you out on every device. Log in with your new
                   password.
                 </p>
               </div>

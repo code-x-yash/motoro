@@ -84,41 +84,37 @@ export default function LandingPage() {
       <LandingNav />
 
       <section className="hero-wash relative overflow-hidden">
-        <div className="page-container relative grid items-center gap-12 py-16 sm:py-20 lg:grid-cols-2 lg:gap-16 lg:py-24">
+        <div className="page-container relative grid items-center gap-12 py-16 sm:py-24 lg:grid-cols-2 lg:gap-16">
           <div className="animate-fade-up">
-            <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-brand-700 shadow-card ring-1 ring-brand-200">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-emerald-500" />
-              {t('landing.heroPill')}
-            </span>
-            <h1 className="mt-6 text-4xl font-bold leading-[1.05] tracking-tight text-ink sm:text-5xl lg:text-6xl">
+            <h1 className="text-[clamp(2.25rem,5vw,3.75rem)] font-bold leading-[1.05] tracking-tight text-ink">
               {t('landing.heroTitle')}
             </h1>
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-slate-600 sm:text-lg">
               {t('app.name')} {t('landing.heroSub')}
             </p>
             <div className="mt-8 flex flex-wrap items-center gap-3">
               <Link
                 href="/register?role=DRIVER"
-                className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand-600 px-6 text-sm font-semibold text-white shadow-pop transition hover:bg-brand-700"
+                className="inline-flex h-12 items-center gap-2 rounded-xl bg-brand-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:ring-offset-2"
               >
                 {t('landing.ctaPrimary')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/register?role=MECHANIC"
-                className="inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-ink ring-1 ring-slate-900/10 transition hover:bg-slate-50"
+                className="inline-flex h-12 items-center gap-2 rounded-xl bg-white px-6 text-sm font-semibold text-ink ring-1 ring-slate-900/10 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:ring-offset-2"
               >
                 {t('landing.ctaSecondary')}
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-12 items-center rounded-xl px-3 text-sm font-semibold text-brand-700 transition hover:text-brand-800"
+                className="inline-flex h-12 items-center rounded-xl px-3 text-sm font-semibold text-brand-700 transition hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:ring-offset-2"
               >
                 {t('nav.login')}
               </Link>
               <Link
                 href="/track"
-                className="inline-flex h-12 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-brand-700 transition hover:text-brand-800"
+                className="inline-flex h-12 items-center gap-1.5 rounded-xl px-3 text-sm font-semibold text-brand-700 transition hover:text-brand-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40 focus-visible:ring-offset-2"
               >
                 <MapPin className="h-4 w-4" />
                 {t('nav.track')}
@@ -141,7 +137,7 @@ export default function LandingPage() {
           </div>
 
           <div className="animate-pop-in mx-auto w-full max-w-md lg:mx-0">
-            <div className="card-bright shadow-pop p-5 sm:p-6">
+            <div className="card-bright p-5 sm:p-6">
               <div className="flex items-center justify-between gap-3">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-sun-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider text-ink">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand-600" />
@@ -191,7 +187,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-16 sm:py-20">
+      <section className="py-16 sm:py-24">
         <div className="page-container">
           <span className="section-eyebrow">{t('landing.categoriesEyebrow')}</span>
           <h2 className="section-title mt-4">{t('landing.categoriesTitle')}</h2>
@@ -206,7 +202,7 @@ export default function LandingPage() {
                 <Link
                   key={issue}
                   href="/register?role=DRIVER"
-                  className="card-bright group flex min-h-[10rem] flex-col items-start gap-3 p-4 transition duration-200 hover:-translate-y-1 hover:shadow-pop"
+                  className="card-bright group flex min-h-[10rem] flex-col items-start gap-3 p-4 transition duration-200 hover:-translate-y-1 hover:shadow-md"
                 >
                   <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-sun-100 text-ink transition group-hover:bg-sun-400">
                     <Icon className="h-5 w-5" />
@@ -216,7 +212,7 @@ export default function LandingPage() {
                   </span>
                   <span className="mt-auto inline-flex items-center gap-1.5 text-xs font-bold text-brand-700">
                     {t('nav.newRequest')}
-                    <ArrowRight className="h-3.5 w-3.5 transition group-hover:translate-x-0.5" />
+                    <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                   </span>
                 </Link>
               );
@@ -225,7 +221,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="how" className="scroll-mt-24 border-t border-slate-900/5 py-16 sm:py-20">
+      <section id="how" className="scroll-mt-24 border-t border-slate-900/5 py-16 sm:py-24">
         <div className="page-container">
           <span className="section-eyebrow">{t('landing.howEyebrow')}</span>
           <h2 className="section-title mt-4">{t('landing.howTitle')}</h2>
@@ -243,7 +239,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section id="services" className="scroll-mt-24 border-t border-slate-900/5 py-16 sm:py-20">
+      <section id="services" className="scroll-mt-24 border-t border-slate-900/5 py-16 sm:py-24">
         <div className="page-container">
           <span className="section-eyebrow">{t('landing.servicesEyebrow')}</span>
           <h2 className="section-title mt-4">{t('landing.servicesTitle')}</h2>
@@ -264,13 +260,13 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="bg-sun-50 py-16 sm:py-20">
+      <section className="bg-sun-50 py-16 sm:py-24">
         <div className="page-container">
           <span className="section-eyebrow">{t('landing.trustEyebrow')}</span>
           <h2 className="section-title mt-4">{t('landing.trustTitle')}</h2>
           <div className="mt-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
             {STATS.map((stat) => (
-              <div key={stat.label} className="rounded-2xl bg-white p-5 shadow-card ring-1 ring-slate-900/5">
+              <div key={stat.label} className="card-bright p-5">
                 <p className="text-3xl font-extrabold tracking-tight text-brand-700">
                   {t(stat.value)}
                 </p>
@@ -307,7 +303,7 @@ export default function LandingPage() {
           </div>
           <Link
             href="/register?role=MECHANIC"
-            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-sun-400 px-6 text-sm font-bold text-ink transition hover:bg-sun-300"
+            className="inline-flex h-12 shrink-0 items-center gap-2 rounded-xl bg-sun-400 px-6 text-sm font-bold text-ink transition hover:bg-sun-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
             {t('landing.ctaSecondary')}
             <ArrowRight className="h-4 w-4" />
@@ -315,7 +311,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="py-16 sm:py-20">
+      <section className="py-16 sm:py-24">
         <div className="page-container">
           <div className="mx-auto max-w-3xl">
             <span className="section-eyebrow">{t('faq.eyebrow')}</span>
@@ -344,7 +340,7 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="pb-16 sm:pb-20">
+      <section className="pb-16 sm:pb-24">
         <div className="page-container">
           <div className="animate-fade-up rounded-3xl bg-brand-600 px-6 py-12 text-center text-white sm:px-12 sm:py-14">
             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
@@ -356,14 +352,14 @@ export default function LandingPage() {
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
               <Link
                 href="/register?role=DRIVER"
-                className="inline-flex h-12 items-center gap-2 rounded-xl bg-sun-400 px-6 text-sm font-bold text-ink transition hover:bg-sun-300"
+                className="inline-flex h-12 items-center gap-2 rounded-xl bg-sun-400 px-6 text-sm font-bold text-ink transition hover:bg-sun-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-brand-600"
               >
                 {t('landing.ctaPrimary')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
               <Link
                 href="/login"
-                className="inline-flex h-12 items-center rounded-xl px-3 text-sm font-semibold text-white underline-offset-4 hover:underline"
+                className="inline-flex h-12 items-center rounded-xl px-3 text-sm font-semibold text-white underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
               >
                 {t('nav.login')}
               </Link>
@@ -412,7 +408,7 @@ export default function LandingPage() {
             </nav>
           </div>
           <p className="border-t border-slate-100 pt-5 text-xs text-slate-400">
-            © {new Date().getFullYear()} {BRAND.name} — {t('app.tagline')}
+            © {new Date().getFullYear()} {BRAND.name} · {t('app.tagline')}
           </p>
         </div>
       </footer>

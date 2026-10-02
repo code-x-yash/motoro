@@ -995,7 +995,7 @@ routes.post('/payments/:id/refund', async (c) => {
   const now = nowIso();
   const refundNote = isFull
     ? (body.reason ?? null)
-    : `Partial refund of ₹${Math.floor(refundCents / 100)}${body.reason ? ` — ${body.reason}` : ''}`;
+    : `Partial refund of ₹${Math.floor(refundCents / 100)}${body.reason ? `: ${body.reason}` : ''}`;
 
   await c.env.DB.batch([
     c.env.DB.prepare(
@@ -1030,7 +1030,7 @@ routes.post('/payments/:id/refund', async (c) => {
     await recordEvent(c.env, {
       requestId: request.id,
       type: 'PAYMENT_REFUNDED',
-      message: `${isFull ? 'Payment' : 'Partial payment'} of ${amountLabel} refunded${body.reason ? ` — ${body.reason}` : ''}`,
+      message: `${isFull ? 'Payment' : 'Partial payment'} of ${amountLabel} refunded${body.reason ? `. ${body.reason}` : ''}`,
       actorRole: 'ADMIN',
       actorUserId: admin.id,
       data: { paymentId: payment.id, amountCents: refundCents, partial: !isFull },
@@ -1175,7 +1175,11 @@ function safeJson(raw: string | null): unknown {
 routes.get('/audit-logs', async (c) => {
   const query = parseInput(paginationSchema, c.req.query());
   const rows = await c.env.DB.prepare(
-    'SELECT * FROM audit_logs ORDER BY created_at DESC LIMIT ? OFFSET ?',
+    `SELECT a.*, u.full_name AS actor_full_name,
+            (SELECT e.reference FROM emergency_requests e WHERE e.id = a.entity_id) AS entity_reference
+     FROM audit_logs a
+     LEFT JOIN users u ON u.id = a.actor_user_id
+     ORDER BY a.created_at DESC LIMIT ? OFFSET ?`,
   )
     .bind(query.limit, query.offset)
     .all();
@@ -1187,6 +1191,8 @@ routes.get('/audit-logs', async (c) => {
           id: string;
           actor_user_id: string | null;
           actor_role: string | null;
+          actor_full_name?: string | null;
+          entity_reference?: string | null;
           action: string;
           entity_type: string | null;
           entity_id: string | null;
@@ -1197,11 +1203,12 @@ routes.get('/audit-logs', async (c) => {
         return {
           id: a.id,
           actorUserId: a.actor_user_id,
-          actorName: null,
+          actorName: a.actor_full_name ?? null,
           actorRole: a.actor_role as never,
           action: a.action,
           entityType: a.entity_type,
           entityId: a.entity_id,
+          entityReference: a.entity_reference ?? null,
           data: a.data_json ? (JSON.parse(a.data_json) as Record<string, unknown>) : null,
           requestId: a.request_id,
           createdAt: a.created_at,

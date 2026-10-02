@@ -339,7 +339,7 @@ function Workbench() {
           <Card>
             <CardHeader>
               <CardTitle>Work steps</CardTitle>
-              <span className="text-xs text-slate-500">Follow the flow — each step unlocks the next.</span>
+              <span className="text-xs text-slate-500">Follow the flow: each step unlocks the next.</span>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-2">
@@ -510,7 +510,7 @@ function Workbench() {
                 <form onSubmit={submitQuote} className="space-y-3 rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold">Quote for the customer</h3>
-                    {quote ? <Badge tone={quote.status === 'APPROVED' ? 'emerald' : 'amber'}>{quote.status}</Badge> : null}
+                     {quote ? <Badge tone={quote.status === 'APPROVED' ? 'emerald' : 'amber'}>{titleCase(quote.status)}</Badge> : null}
                   </div>
                   <div className="space-y-2">
                     {quoteItems.map((item, index) => (
@@ -604,7 +604,7 @@ function Workbench() {
                 <div className="rounded-xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold">Quote</h3>
-                    <Badge tone={quote.status === 'APPROVED' ? 'emerald' : 'slate'}>{quote.status}</Badge>
+                    <Badge tone={quote.status === 'APPROVED' ? 'emerald' : 'slate'}>{titleCase(quote.status)}</Badge>
                   </div>
                   <ul className="mt-2 space-y-1 text-sm">
                     {quote.items.map((item) => (
@@ -693,11 +693,11 @@ function Workbench() {
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
               <Row label="Driver" value={request.driverName} />
-              <Row label="Phone" value={request.driverPhone ?? '—'} />
-              <Row label="Vehicle" value={request.vehicleLabel ?? '—'} />
-              <Row label="Registration" value={request.vehicleRegistration ?? '—'} />
+              <Row label="Phone" value={request.driverPhone ?? 'None'} />
+              <Row label="Vehicle" value={request.vehicleLabel ?? 'None'} />
+              <Row label="Registration" value={request.vehicleRegistration ?? 'None'} />
               <Row label="Issue" value={titleCase(request.issueType)} />
-              <Row label="Description" value={request.description ?? '—'} />
+              <Row label="Description" value={request.description ?? 'None'} />
               <Row label="Created" value={formatDateTime(request.createdAt)} />
             </CardContent>
           </Card>

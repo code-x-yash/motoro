@@ -283,7 +283,7 @@ function OperationsConsole() {
                         </Td>
                         <Td>
                           <p className="text-slate-800">{item.driverName}</p>
-                          <p className="text-xs text-slate-400">{item.vehicleRegistration ?? '—'}</p>
+                          <p className="text-xs text-slate-400">{item.vehicleRegistration ?? 'None'}</p>
                         </Td>
                         <Td>{titleCase(item.issueType)}</Td>
                         <Td>
@@ -368,18 +368,18 @@ function OperationsConsole() {
                     <Tr key={mechanic.userId}>
                       <Td className="font-medium text-slate-900">{mechanic.fullName}</Td>
                       <Td>
-                        <Badge tone={mechanic.status === 'AVAILABLE' ? 'emerald' : 'slate'}>{mechanic.status}</Badge>
+                        <Badge tone={mechanic.status === 'AVAILABLE' ? 'emerald' : 'slate'}>{titleCase(mechanic.status)}</Badge>
                       </Td>
                       <Td>
                         <Badge tone={mechanic.verificationStatus === 'VERIFIED' ? 'emerald' : 'amber'}>
-                          {mechanic.verificationStatus}
+                          {titleCase(mechanic.verificationStatus)}
                         </Badge>
                       </Td>
                       <Td>{mechanic.activeJobs ?? 0}</Td>
                       <Td>
                         {mechanic.lastKnownLatitude ?? mechanic.latitude
                           ? `${(mechanic.lastKnownLatitude ?? mechanic.latitude)?.toFixed(3)}, ${(mechanic.lastKnownLongitude ?? mechanic.longitude)?.toFixed(3)}`
-                          : '—'}
+                          : 'None'}
                       </Td>
                     </Tr>
                   ))}
@@ -408,12 +408,12 @@ function OperationsConsole() {
                 <Tbody>
                   {failed.map((row, index) => (
                     <Tr key={String(row.id ?? index)}>
-                      <Td className="font-medium">{String(row.reference ?? '—')}</Td>
-                      <Td>{String(row.mechanic_name ?? row.mechanicName ?? '—')}</Td>
+                      <Td className="font-medium">{String(row.reference ?? 'None')}</Td>
+                      <Td>{String(row.mechanic_name ?? row.mechanicName ?? 'None')}</Td>
                       <Td>
-                        <Badge tone="rose">{String(row.status ?? '—')}</Badge>
+                        <Badge tone="rose">{row.status ? titleCase(String(row.status)) : 'None'}</Badge>
                       </Td>
-                      <Td>{row.offered_at ? formatDateTime(String(row.offered_at)) : '—'}</Td>
+                      <Td>{row.offered_at ? formatDateTime(String(row.offered_at)) : 'None'}</Td>
                     </Tr>
                   ))}
                 </Tbody>
@@ -490,7 +490,7 @@ function OperationsConsole() {
                                 : 'slate'
                           }
                         >
-                          {attempt.status}
+                          {titleCase(attempt.status)}
                         </Badge>
                       </div>
                     ))
@@ -550,7 +550,7 @@ function OpsActions({
                 .filter((mechanic) => mechanic.verificationStatus === 'VERIFIED')
                 .map((mechanic) => (
                   <option key={mechanic.userId} value={mechanic.userId}>
-                    {mechanic.fullName} · {mechanic.status}
+                    {mechanic.fullName} · {titleCase(mechanic.status)}
                   </option>
                 ))}
             </Select>

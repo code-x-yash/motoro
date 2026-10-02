@@ -5,6 +5,7 @@ import type { MechanicProfileDto } from '@rr/types';
 import { Alert, Badge, Button, Card, CardContent, CardHeader, CardTitle, Field, Input, LoadingState, Select, Textarea } from '@rr/ui';
 import { AppShell } from '@/components/app-shell';
 import { apiDelete, apiGet, apiPatch, apiPost, errorMessage, fieldErrors } from '@/lib/api';
+import { titleCase } from '@/lib/format';
 import { MAX_UPLOAD_BYTES, UPLOAD_TYPES, uploadToR2 } from '@/lib/uploads';
 
 interface AvailabilitySlot {
@@ -124,7 +125,7 @@ function MechanicSettings() {
         documentKey: documentKey.trim() || undefined,
       });
       await load();
-      setNotice('Verification submitted — an administrator will review it shortly.');
+      setNotice('Verification submitted. An administrator will review it shortly.');
     } catch (err) {
       setFields(fieldErrors(err));
       setError(errorMessage(err));
@@ -205,7 +206,7 @@ function MechanicSettings() {
           <CardHeader>
             <CardTitle>Verification</CardTitle>
             <Badge tone={profile?.verificationStatus === 'VERIFIED' ? 'emerald' : 'amber'}>
-              {profile?.verificationStatus ?? 'UNKNOWN'}
+              {profile?.verificationStatus ? titleCase(profile.verificationStatus) : 'Unknown'}
             </Badge>
           </CardHeader>
           <CardContent>
@@ -220,7 +221,7 @@ function MechanicSettings() {
                 <Field
                   label="Verification document"
                   error={fields.documentKey}
-                  hint="Licence, ID or insurance — JPG, PNG or WEBP up to 8 MB."
+                  hint="Licence, ID or insurance: JPG, PNG or WEBP up to 8 MB."
                 >
                   <input
                     type="file"
@@ -232,7 +233,7 @@ function MechanicSettings() {
                   {docBusy ? <p className="mt-1 text-xs text-slate-500">Uploading…</p> : null}
                   {documentKey ? (
                     <p className="mt-1 text-xs text-emerald-700">
-                      New document ready — it is attached when you submit for review.
+                      New document ready. It is attached when you submit for review.
                     </p>
                   ) : documentUrl ? (
                     <p className="mt-1 text-xs text-slate-500">
@@ -299,7 +300,7 @@ function MechanicSettings() {
                   </button>
                 </span>
               ))}
-              {slots.length === 0 ? <p className="text-sm text-slate-500">No windows configured — you will receive offers whenever you are online.</p> : null}
+              {slots.length === 0 ? <p className="text-sm text-slate-500">No windows configured. You will receive offers whenever you are online.</p> : null}
             </div>
 
             <form onSubmit={addSlot} className="flex flex-wrap items-end gap-3 border-t border-slate-100 pt-4">

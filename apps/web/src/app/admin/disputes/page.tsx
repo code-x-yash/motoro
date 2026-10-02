@@ -25,7 +25,7 @@ import {
 } from '@rr/ui';
 import { AppShell } from '@/components/app-shell';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
-import { formatDateTime } from '@/lib/format';
+import { formatDateTime, titleCase } from '@/lib/format';
 
 interface AdminDispute {
   id: string;
@@ -97,7 +97,7 @@ function AdminDisputes() {
       await apiPost(`/api/admin/disputes/${resolveTarget.id}/resolve`, { resolution: resolution.trim() });
       setResolveTarget(null);
       setResolution('');
-      setNotice(`Dispute on ${resolveTarget.reference} resolved — the customer has been notified.`);
+      setNotice(`Dispute on ${resolveTarget.reference} resolved. The customer has been notified.`);
       await load();
     } catch (err) {
       setError(errorMessage(err));
@@ -186,7 +186,7 @@ function AdminDisputes() {
                       ) : null}
                     </Td>
                     <Td>
-                      <Badge tone={STATUS_TONE[dispute.status]}>{dispute.status}</Badge>
+                      <Badge tone={STATUS_TONE[dispute.status]}>{titleCase(dispute.status)}</Badge>
                     </Td>
                     <Td className="text-right">
                       {dispute.status !== 'RESOLVED' ? (
@@ -201,7 +201,7 @@ function AdminDisputes() {
                           Resolve
                         </Button>
                       ) : (
-                        <span className="text-xs text-slate-400">—</span>
+                        <span className="text-xs text-slate-400">None</span>
                       )}
                     </Td>
                   </Tr>
@@ -240,7 +240,7 @@ function AdminDisputes() {
               value={resolution}
               onChange={(e) => setResolution(e.target.value)}
               rows={4}
-              placeholder="Reviewed the service report — partial credit issued."
+              placeholder="Reviewed the service report, partial credit issued."
             />
           </Field>
         </div>

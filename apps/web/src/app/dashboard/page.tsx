@@ -142,7 +142,7 @@ function DriverDashboard() {
             {greeting}, {firstName}
           </h1>
           <p className="page-subtitle">
-            Your roadside, under control — live status, vehicles and recent help requests.
+            Your roadside, under control: live status, vehicles and recent help requests.
           </p>
         </div>
         <Link
@@ -231,7 +231,7 @@ function DriverDashboard() {
             {!active ? (
               <EmptyState
                 title="No active request. Need help?"
-                description="Battery, flat tyre, fuel, accident — one tap starts a timed dispatch to nearby verified mechanics."
+                description="Battery, flat tyre, fuel, accident: one tap starts a timed dispatch to nearby verified mechanics."
                 action={
                   <Link
                     href="/requests/new"
@@ -294,7 +294,7 @@ function DriverDashboard() {
               {vehicles.length === 0 ? (
                 <div>
                   <p className="text-sm text-slate-500">
-                    No vehicles yet — add one to speed up requests.
+                    No vehicles yet. Add one to speed up requests.
                   </p>
                   <Link
                     href="/vehicles"

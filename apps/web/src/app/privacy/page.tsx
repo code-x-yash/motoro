@@ -11,10 +11,10 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
       `We collect only what we need to run roadside dispatch for ${BRAND.legalName}:`,
     ],
     bullets: [
-      'Profile details — your name, email address and mobile number.',
-      'Vehicle details — make, model, registration number, fuel type and photos you upload.',
+      'Profile details: your name, email address and mobile number.',
+      'Vehicle details: make, model, registration number, fuel type and photos you upload.',
       'Location while a request is active, so a provider can reach you.',
-      'Payment reference IDs and invoice details. We never store your card number, CVV or UPI PIN — those are entered only on our payment partner’s interface.',
+      'Payment reference IDs and invoice details. We never store your card number, CVV or UPI PIN. Those are entered only on our payment partner’s interface.',
       'Usage data such as request history, ratings and support conversations.',
     ],
   },
@@ -22,7 +22,7 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
     title: 'How we use your information',
     body: [
       'We use your information to dispatch the nearest provider, show live tracking, generate GST-ready invoices, keep a verifiable history of every job, prevent fraud and abuse, and send you service notifications (SMS, WhatsApp, email or push, according to your preferences).',
-      'We also use aggregated, de-identified data to measure response times, improve dispatch and plan coverage — data that no longer identifies you.',
+      'We also use aggregated, de-identified data to measure response times, improve dispatch and plan coverage. This data no longer identifies you.',
     ],
   },
   {
@@ -37,7 +37,7 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
     title: 'How we share information',
     body: ['We share personal information only with:'],
     bullets: [
-      'The mechanic, workshop or towing partner assigned to your active request — name, phone, address, vehicle and location for that job only.',
+      'The mechanic, workshop or towing partner assigned to your active request: name, phone, address, vehicle and location for that job only.',
       'Our operations and support team, who monitor open requests 24×7.',
       'Our payment processor, which handles UPI, card and netbanking transactions under its own regulated controls.',
       'Law enforcement, regulators or courts, when disclosure is required by law or is necessary to protect safety and prevent fraud.',
@@ -59,7 +59,7 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
       'Access the personal data we hold about you.',
       'Correct inaccurate or incomplete data.',
       'Erase your data and withdraw consent, subject to legal retention requirements.',
-      'Grievance redressal — raise a complaint with our grievance officer.',
+      'Grievance redressal: raise a complaint with our grievance officer.',
       'Nominate another person to exercise your rights in case of death or incapacity.',
     ],
   },
@@ -93,7 +93,7 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
   {
     title: 'Contact',
     body: [
-      `Grievance Officer, ${BRAND.legalName}, registered office at New Delhi, India. Write to us at ${BRAND.supportEmail} or call ${BRAND.supportPhone} — we respond within 30 days.`,
+      `Grievance Officer, ${BRAND.legalName}, registered office at New Delhi, India. Write to us at ${BRAND.supportEmail} or call ${BRAND.supportPhone}. We respond within 30 days.`,
       `Questions about how we handle your data: ${BRAND.supportEmail}.`,
     ],
   },

@@ -25,7 +25,7 @@ import {
 import { Wallet } from 'lucide-react';
 import { AppShell } from '@/components/app-shell';
 import { api, apiGet, apiPost, errorMessage } from '@/lib/api';
-import { formatDateTime, formatINR } from '@/lib/format';
+import { formatDateTime, formatINR, titleCase } from '@/lib/format';
 
 interface EarningsRow {
   jobId: string;
@@ -163,7 +163,7 @@ function Earnings() {
     try {
       await apiPost('/api/mechanics/me/payouts', { amountCents: Math.round(rupees * 100) });
       setPayoutRupees('');
-      setNotice('Payout requested — operations will review it shortly.');
+      setNotice('Payout requested. Operations will review it shortly.');
       await refreshPayoutState();
     } catch (err) {
       setError(errorMessage(err));
@@ -289,10 +289,10 @@ function Earnings() {
                     <Td>{formatDateTime(payout.createdAt)}</Td>
                     <Td className="font-semibold tabular-nums">{formatINR(payout.amountCents)}</Td>
                     <Td>
-                      <Badge tone={PAYOUT_TONE[payout.status]}>{payout.status}</Badge>
+                      <Badge tone={PAYOUT_TONE[payout.status]}>{titleCase(payout.status)}</Badge>
                       {payout.note ? <span className="ml-2 text-xs text-slate-500">{payout.note}</span> : null}
                     </Td>
-                    <Td>{payout.decidedAt ? formatDateTime(payout.decidedAt) : '—'}</Td>
+                    <Td>{payout.decidedAt ? formatDateTime(payout.decidedAt) : 'None'}</Td>
                   </Tr>
                 ))}
               </Tbody>
@@ -334,9 +334,9 @@ function Earnings() {
                       </Link>
                     </Td>
                     <Td>
-                      <Badge>{row.issueType}</Badge>
+                      <Badge>{titleCase(row.issueType)}</Badge>
                     </Td>
-                    <Td>{row.completedAt ? formatDateTime(row.completedAt) : '—'}</Td>
+                    <Td>{row.completedAt ? formatDateTime(row.completedAt) : 'None'}</Td>
                     <Td className="text-right font-semibold tabular-nums text-emerald-700">
                       {formatINR(row.earningsCents)}
                     </Td>

@@ -32,9 +32,9 @@ import {
 import { Check, Clock, Loader2, MapPin, Navigation, Share2, ShieldAlert, Truck, Wrench, XCircle } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
-import { DEFAULT_CONFIG, formatMoney } from '@rr/config';
+import { DEFAULT_CONFIG, ISSUE_LABELS, formatMoney } from '@rr/config';
 import { useRealtime } from '@/lib/realtime';
-import { formatDateTime, formatINR, titleCase } from '@/lib/format';
+import { formatDateTime, formatINR, timeAgo, titleCase } from '@/lib/format';
 import { PROGRESS_STEPS, progressStepIndex } from '@/lib/progress';
 import { MapPanel, type MapMarker, type MapRouteInfo } from '@/components/map-panel';
 
@@ -45,6 +45,33 @@ declare global {
       on(event: string, handler: (response: { error?: { description?: string } }) => void): void;
     };
   }
+}
+
+const ACTOR_LABELS: Record<string, string> = {
+  DRIVER: 'Driver',
+  MECHANIC: 'Mechanic',
+  WORKSHOP: 'Workshop',
+  TOWING_PARTNER: 'Towing partner',
+  OPERATIONS: 'Operations',
+  ADMIN: 'Admin',
+  SYSTEM: 'Motoro',
+};
+
+function timelineActorLabel(actorRole: string | null, viewerRole: string | undefined): string {
+  const role = actorRole ?? 'SYSTEM';
+  if (viewerRole && role === viewerRole) return 'You';
+  return ACTOR_LABELS[role] ?? titleCase(role);
+}
+
+function humanizeEventMessage(message: string): string {
+  let out = message.replace(/ — /g, ', ');
+  const legacy = out.match(/^(?:Status changed to|Job status:)\s+(.+)$/i);
+  if (legacy) out = `Status updated to ${titleCase(legacy[1])}`;
+  out = out.replace(/\(([A-Z][A-Z_]+[A-Z])\)/g, (match, code: string) => {
+    const label = ISSUE_LABELS[code as keyof typeof ISSUE_LABELS];
+    return label ? `(${label})` : match;
+  });
+  return out;
 }
 
 interface ReviewEntry {
@@ -394,7 +421,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
     }
     const poll = window.setInterval(() => void load(), 4000);
     const stop = window.setTimeout(
-      () => setUpiNote("Still waiting for confirmation — we'll notify you the moment it lands."),
+      () => setUpiNote("Still waiting for confirmation. We'll notify you the moment it lands."),
       32000,
     );
     return () => {
@@ -598,7 +625,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
         <Card className="border border-sun-200 bg-sun-50">
           <CardContent className="flex items-center gap-2 py-3 text-sm text-slate-700">
             <Clock className="h-4 w-4 shrink-0 text-sun-700" />
-            Your mechanic is here — the start code was sent to your phone and notifications.
+            Your mechanic is here: the start code was sent to your phone and notifications.
           </CardContent>
         </Card>
       ) : null}
@@ -796,7 +823,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
                     {invoicePayments.map((payment) => (
                       <div key={payment.id} className="flex items-center justify-between text-xs text-slate-500">
                         <span>
-                          {payment.method} · {titleCase(payment.provider)} · {payment.status}
+                          {titleCase(payment.method)} · {titleCase(payment.provider)} · {titleCase(payment.status)}
                         </span>
                         <span>{payment.paidAt ? formatDateTime(payment.paidAt) : formatDateTime(payment.createdAt ?? '')}</span>
                       </div>
@@ -804,7 +831,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
                   </div>
                 ) : null}
                 <div className="flex flex-wrap items-center gap-3">
-                  <Badge tone={invoice.status === 'PAID' ? 'emerald' : 'slate'}>{invoice.status}</Badge>
+                  <Badge tone={invoice.status === 'PAID' ? 'emerald' : 'slate'}>{titleCase(invoice.status)}</Badge>
                   {invoice.pdfUrl ? (
                     <a
                       href={invoice.pdfUrl}
@@ -915,9 +942,9 @@ export function RequestSession({ requestId }: { requestId: string }) {
                     <li key={event.id} className="flex gap-3">
                       <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-500" />
                       <div className="min-w-0">
-                        <p className="text-sm text-slate-700">{event.message}</p>
-                        <p className="text-xs text-slate-400">
-                          {formatDateTime(event.createdAt)} · {event.actorRole ?? 'SYSTEM'}
+                        <p className="text-sm text-slate-700">{humanizeEventMessage(event.message)}</p>
+                        <p className="text-xs text-slate-400" title={formatDateTime(event.createdAt)}>
+                          {timelineActorLabel(event.actorRole ?? null, user?.role)} · {timeAgo(event.createdAt)}
                         </p>
                       </div>
                     </li>
@@ -936,7 +963,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
             <CardContent className="space-y-3 text-sm">
               <Row label="Status" value={titleCase(request.status)} />
               <Row label="Created" value={formatDateTime(request.createdAt)} />
-              <Row label="Vehicle" value={request.vehicleLabel ?? '—'} />
+              <Row label="Vehicle" value={request.vehicleLabel ?? 'None'} />
               <Row label="Escalation level" value={String(request.escalationLevel)} />
               <Row
                 label="Estimate / total"
@@ -948,7 +975,10 @@ export function RequestSession({ requestId }: { requestId: string }) {
                       : 'Pending diagnosis'
                 }
               />
-              <Row label="Payment" value={request.paymentStatus ?? '—'} />
+              <Row
+                label="Payment"
+                value={request.paymentStatus ? titleCase(request.paymentStatus) : 'None'}
+              />
             </CardContent>
           </Card>
 
@@ -1184,7 +1214,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
       >
         {contacts.length === 0 ? (
           <p className="text-sm text-slate-500">
-            No emergency contacts yet — add them from your profile.
+            No emergency contacts yet. Add them from your profile.
           </p>
         ) : (
           <div className="space-y-2">
@@ -1343,7 +1373,7 @@ function OtpCountdown({ expiresAt }: { expiresAt: string | null }) {
   if (!valid) return <span>Ask your mechanic to refresh this code.</span>;
 
   const remaining = Math.max(0, Math.floor((endAt - now) / 1000));
-  if (remaining <= 0) return <span className="text-rose-700">Expired — ask your mechanic to refresh</span>;
+  if (remaining <= 0) return <span className="text-rose-700">Expired. Ask your mechanic to refresh.</span>;
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;

@@ -479,7 +479,7 @@ async function decideQuoteHandler(c: Context<{ Bindings: Env }>, decision: 'APPR
     await transitionJob(c.env, job, 'QUOTE_APPROVED', {
       actorUserId: user.id,
       actorRole: 'DRIVER',
-      message: 'Quote approved — starting repair',
+      message: 'Quote approved, starting repair',
     });
     await notify(c.env, {
       userId: job.mechanic_user_id,
@@ -493,7 +493,7 @@ async function decideQuoteHandler(c: Context<{ Bindings: Env }>, decision: 'APPR
     await transitionJob(c.env, job, 'DIAGNOSING', {
       actorUserId: user.id,
       actorRole: 'DRIVER',
-      message: 'Quote rejected — discussing next steps',
+      message: 'Quote rejected, discussing next steps',
       note: input.reason,
     });
     await notify(c.env, {

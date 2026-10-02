@@ -125,7 +125,7 @@ function MechanicJobs() {
                             {request ? <Badge>{titleCase(request.issueType)}</Badge> : null}
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
-                            {request?.vehicleLabel ?? 'Vehicle —'} · {request?.address ?? 'Location on map'} ·{' '}
+                            {request?.vehicleLabel ?? 'None'} · {request?.address ?? 'Location on map'} ·{' '}
                             {formatDateTime(job.acceptedAt ?? job.completedAt)}
                           </p>
                         </div>

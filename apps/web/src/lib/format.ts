@@ -1,5 +1,5 @@
 export function formatINR(cents: number | null | undefined, opts: { showDecimals?: boolean } = {}): string {
-  if (cents === null || cents === undefined || Number.isNaN(cents)) return '—';
+  if (cents === null || cents === undefined || Number.isNaN(cents)) return 'None';
   const value = cents / 100;
   const hasPaisa = cents % 100 !== 0;
   const showDecimals = opts.showDecimals ?? hasPaisa;
@@ -12,13 +12,13 @@ export function formatINR(cents: number | null | undefined, opts: { showDecimals
 }
 
 export function formatDistance(km: number | null | undefined): string {
-  if (km === null || km === undefined) return '—';
+  if (km === null || km === undefined) return 'None';
   if (km < 1) return `${Math.round(km * 1000)} m`;
   return `${km.toFixed(1)} km`;
 }
 
 export function formatEta(minutes: number | null | undefined): string {
-  if (minutes === null || minutes === undefined) return '—';
+  if (minutes === null || minutes === undefined) return 'None';
   if (minutes < 60) return `${Math.max(1, Math.round(minutes))} min`;
   const hours = Math.floor(minutes / 60);
   const mins = Math.round(minutes % 60);
@@ -26,9 +26,9 @@ export function formatEta(minutes: number | null | undefined): string {
 }
 
 export function formatDateTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'None';
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return 'None';
   return new Intl.DateTimeFormat('en-IN', {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -36,16 +36,16 @@ export function formatDateTime(iso: string | null | undefined): string {
 }
 
 export function formatTime(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'None';
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return '—';
+  if (Number.isNaN(date.getTime())) return 'None';
   return new Intl.DateTimeFormat('en-IN', { timeStyle: 'short' }).format(date);
 }
 
 export function timeAgo(iso: string | null | undefined): string {
-  if (!iso) return '—';
+  if (!iso) return 'None';
   const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return '—';
+  if (Number.isNaN(then)) return 'None';
   const seconds = Math.round((Date.now() - then) / 1000);
   if (seconds < 45) return 'just now';
   const minutes = Math.round(seconds / 60);
@@ -66,6 +66,6 @@ export function titleCase(value: string): string {
 }
 
 export function vehicleLabel(vehicle: { make: string; model: string; registrationNumber: string } | null | undefined): string {
-  if (!vehicle) return '—';
+  if (!vehicle) return 'None';
   return `${vehicle.make} ${vehicle.model} · ${vehicle.registrationNumber}`;
 }

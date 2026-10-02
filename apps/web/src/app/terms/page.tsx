@@ -24,7 +24,7 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
   {
     title: 'The service',
     body: [
-      `${BRAND.name} connects drivers with independent, verified mechanics, workshops and towing partners for roadside assistance — battery jump-starts, flat tyres, fuel delivery, lockouts, on-site diagnostics and repair, and towing.`,
+      `${BRAND.name} connects drivers with independent, verified mechanics, workshops and towing partners for roadside assistance: battery jump-starts, flat tyres, fuel delivery, lockouts, on-site diagnostics and repair, and towing.`,
       'When you raise a request we dispatch it to nearby providers, show live tracking while a provider is on the way, and process payment. The repair or towing contract is between you and the attending provider; we provide dispatch, tracking and payment infrastructure.',
     ],
   },
@@ -50,7 +50,7 @@ const SECTIONS: Array<{ title: string; body: string[]; bullets?: string[] }> = [
     bullets: [
       'Provide accurate location, vehicle and contact details for every request.',
       'Be reachable while a request is active and meet the provider at the agreed spot.',
-      'Treat providers and our staff with respect — harassment, abuse or unsafe conduct ends the request.',
+      'Treat providers and our staff with respect. Harassment, abuse or unsafe conduct ends the request.',
       'Use the platform only for lawful purposes and only for a vehicle you own or are authorised to act for.',
       'Avoid arranging payments outside the platform to circumvent fees or quotes.',
     ],

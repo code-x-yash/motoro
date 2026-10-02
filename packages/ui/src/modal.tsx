@@ -46,7 +46,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         className={cn(
-          'relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl',
+          'relative z-10 max-h-[92vh] w-full overflow-y-auto rounded-t-lg bg-white shadow-xl sm:rounded-lg',
           wide ? 'sm:max-w-3xl' : 'sm:max-w-lg',
           className,
         )}
@@ -58,7 +58,7 @@ export function Modal({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+              className="-my-2 -mr-2 flex h-10 w-10 items-center justify-center rounded-md text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/40"
             >
               ✕
             </button>

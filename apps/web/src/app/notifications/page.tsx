@@ -220,7 +220,7 @@ function NotificationsContent() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">Browser notifications</p>
               <p className="text-sm text-slate-600">
-                Get push alerts for dispatch offers, arrivals, quotes and payments — even when this tab is closed.
+                Get push alerts for dispatch offers, arrivals, quotes and payments, even when this tab is closed.
               </p>
             </div>
             <Button variant={pushEnabled ? 'secondary' : 'primary'} size="sm" loading={pushBusy} onClick={() => void togglePush()}>
@@ -242,7 +242,7 @@ function NotificationsContent() {
             title={filter === 'unread' ? 'No unread notifications' : 'No notifications'}
             description={
               filter === 'unread'
-                ? 'You are all caught up — new dispatch and payment updates land here.'
+                ? 'You are all caught up. New dispatch and payment updates land here.'
                 : 'You will see dispatch, quote and payment updates here.'
             }
             icon={<Bell className="h-10 w-10" />}

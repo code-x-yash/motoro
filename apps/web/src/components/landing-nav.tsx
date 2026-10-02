@@ -5,10 +5,13 @@ import { useState } from 'react';
 import { BRAND } from '@rr/config';
 import { Menu, X } from 'lucide-react';
 import { useI18n } from '@/lib/i18n';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { useTheme } from '@/lib/theme';
 
 export function LandingNav() {
   const [open, setOpen] = useState(false);
   const { t, lang, setLang } = useI18n();
+  const { theme } = useTheme();
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-900/5 bg-white/85 backdrop-blur">
@@ -36,6 +39,7 @@ export function LandingNav() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <ThemeToggle />
           <div className="flex items-center rounded-full bg-slate-100 p-0.5 text-xs font-bold">
             {(['en', 'hi'] as const).map((code) => (
               <button
@@ -120,6 +124,10 @@ export function LandingNav() {
             >
               {t('nav.signup')}
             </Link>
+            <div className="mt-2 flex items-center justify-between border-t border-slate-100 pt-3">
+              <span className="text-xs font-medium text-slate-500">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
+              <ThemeToggle className="-mr-2" />
+            </div>
           </div>
         </div>
       ) : null}

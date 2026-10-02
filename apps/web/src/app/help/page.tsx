@@ -41,7 +41,7 @@ const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'How fast can someone reach me?',
-        a: 'Requests are broadcast to nearby verified mechanics the moment you send them — most jobs are accepted in under a few minutes, with a live ETA on your screen. Our operations team watches every open request 24×7, day or night.',
+        a: 'Requests are broadcast to nearby verified mechanics the moment you send them. Most jobs are accepted in under a few minutes, with a live ETA on your screen. Our operations team watches every open request 24×7, day or night.',
       },
       {
         q: 'What problems do you cover?',
@@ -49,7 +49,7 @@ const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'What should I do while I wait?',
-        a: 'Get yourself and your passengers to a safe spot, switch on your hazard lights, and share your exact location with a couple of photos in the request. Stay where it is safe — your mechanic comes to you.',
+        a: 'Get yourself and your passengers to a safe spot, switch on your hazard lights, and share your exact location with a couple of photos in the request. Stay where it is safe. Your mechanic comes to you.',
       },
     ],
   },
@@ -60,7 +60,7 @@ const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'How do I track my mechanic?',
-        a: 'Open your request to see a live map, the mechanic’s profile and vehicle, and an ETA that updates at every step — assigned, en route, arrived and diagnosing.',
+        a: 'Open your request to see a live map, the mechanic’s profile and vehicle, and an ETA that updates at every step: assigned, en route, arrived and diagnosing.',
       },
       {
         q: 'How do I know it is the right person?',
@@ -79,7 +79,7 @@ const FAQ_GROUPS: FaqGroup[] = [
     items: [
       {
         q: 'Do I approve the price before work starts?',
-        a: 'Always. After the diagnosis you receive a digital quote with parts and labour on your phone. Nothing is touched on your vehicle until you tap Approve — no approval, no work.',
+        a: 'Always. After the diagnosis you receive a digital quote with parts and labour on your phone. Nothing is touched on your vehicle until you tap Approve. No approval, no work.',
       },
       {
         q: 'How do I pay, and do I get a receipt?',
@@ -87,7 +87,7 @@ const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'Can I cancel a request?',
-        a: 'Yes — the first 60 seconds are free. After that a small cancellation fee applies, because a mechanic may already be on the way to you.',
+        a: 'Yes. The first 60 seconds are free. After that a small cancellation fee applies, because a mechanic may already be on the way to you.',
       },
     ],
   },
@@ -106,7 +106,7 @@ const FAQ_GROUPS: FaqGroup[] = [
       },
       {
         q: 'Can I control notifications?',
-        a: 'Yes. Profile settings let you choose which alerts you get — dispatch updates, ETA changes, quote approvals and offers — so your phone only buzzes for things that matter.',
+        a: 'Yes. Profile settings let you choose which alerts you get: dispatch updates, ETA changes, quote approvals and offers, so your phone only buzzes for things that matter.',
       },
     ],
   },
@@ -144,7 +144,7 @@ export default function HelpPage() {
             <span className="section-eyebrow">Help Center</span>
             <h1 className="page-title mt-3">How can we help?</h1>
             <p className="page-subtitle">
-              Answers about roadside help, tracking, quotes and safety — plus a human you can reach any hour.
+              Answers about roadside help, tracking, quotes and safety, plus a human you can reach any hour.
             </p>
           </div>
           <Link
@@ -163,7 +163,7 @@ export default function HelpPage() {
               Talk to a human
             </div>
             <p className="mt-1 text-sm text-white/80">
-              Support answers around the clock — real people, not bots.
+              Support answers around the clock: real people, not bots.
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -257,7 +257,7 @@ export default function HelpPage() {
           <div className="card-bright animate-fade-up p-5">
             <Star className="h-5 w-5 text-brand-700" />
             <p className="mt-3 text-sm font-semibold text-ink">Quote before the wrench</p>
-            <p className="mt-1 text-xs text-slate-500">Approve the price on your phone — or no work happens.</p>
+            <p className="mt-1 text-xs text-slate-500">Approve the price on your phone, or no work happens.</p>
           </div>
           <div className="card-bright animate-fade-up p-5">
             <Wrench className="h-5 w-5 text-brand-700" />
