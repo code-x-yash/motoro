@@ -241,7 +241,8 @@ export async function mapPublicMechanic(
 ): Promise<MechanicPublicDto | null> {
   const row = await env.DB.prepare(
     `SELECT m.user_id, m.status, m.verification_status, m.rating_sum, m.rating_count,
-            m.latitude, m.longitude, u.full_name
+            m.latitude, m.longitude, m.last_known_latitude, m.last_known_longitude, m.last_location_at,
+            u.full_name
      FROM mechanics m
      JOIN users u ON u.id = m.user_id
      WHERE m.user_id = ?`,
@@ -255,6 +256,9 @@ export async function mapPublicMechanic(
       rating_count: number;
       latitude: number | null;
       longitude: number | null;
+      last_known_latitude: number | null;
+      last_known_longitude: number | null;
+      last_location_at: string | null;
       full_name: string;
     }>();
   if (!row) return null;
@@ -263,9 +267,19 @@ export async function mapPublicMechanic(
     .bind(mechanicUserId)
     .all<{ skill: string }>();
 
+  // Prefer the live position (streamed during jobs) over the profile's static
+  // coordinates so distance/ETA reflect where the mechanic actually is.
+  const lastLocationAgeMs = row.last_location_at ? Date.now() - new Date(row.last_location_at).getTime() : Number.POSITIVE_INFINITY;
+  const livePosition =
+    row.last_known_latitude != null &&
+    row.last_known_longitude != null &&
+    lastLocationAgeMs < 12 * 60 * 60 * 1000;
+  const positionLat = livePosition ? row.last_known_latitude : row.latitude;
+  const positionLng = livePosition ? row.last_known_longitude : row.longitude;
+
   let dist: number | null = null;
-  if (fromLat != null && fromLng != null && row.latitude != null && row.longitude != null) {
-    dist = roundKm(distanceKm(fromLat, fromLng, row.latitude, row.longitude));
+  if (fromLat != null && fromLng != null && positionLat != null && positionLng != null) {
+    dist = roundKm(distanceKm(fromLat, fromLng, positionLat, positionLng));
   }
 
   return {

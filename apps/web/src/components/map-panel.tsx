@@ -126,6 +126,7 @@ export function MapPanel({
   const needsFitRef = useRef(true);
 
   const [mode, setMode] = useState<MapMode>('pending');
+  const [mapIdle, setMapIdle] = useState(true);
   const [points, setPoints] = useState<Record<string, { x: number; y: number }>>({});
 
   useEffect(() => {
@@ -178,6 +179,10 @@ export function MapPanel({
         }).addTo(map);
         map.on('move', updatePoints);
         map.on('resize', updatePoints);
+        // Pins glide between live positions only while the map is still;
+        // during pans/zooms they snap so they don't trail the drag.
+        map.on('movestart', () => setMapIdle(false));
+        map.on('moveend', () => setMapIdle(true));
         if (first) map.setView([first.latitude, first.longitude], 15);
         leafletRef.current = L;
         mapRef.current = map;
@@ -357,8 +362,9 @@ export function MapPanel({
                 type="button"
                 onClick={() => onSelect?.(marker.id)}
                 className={cn(
-                  'pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full shadow-md transition-transform hover:scale-110',
+                  'pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full shadow-md hover:scale-110',
                   TONE_CLASS[marker.tone ?? 'brand'],
+                  leafletPins && mapIdle ? 'transition-[left,top] duration-700 ease-linear' : '',
                   selected ? 'ring-4 ring-brand-300' : '',
                   marker.icon ? 'flex h-8 w-8 items-center justify-center text-sm' : 'h-4 w-4',
                 )}

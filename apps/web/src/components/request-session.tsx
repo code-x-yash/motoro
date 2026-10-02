@@ -28,7 +28,7 @@ import {
   UrgencyBadge,
   cn,
 } from '@rr/ui';
-import { Check, Clock, Loader2, MapPin, Navigation, Share2, ShieldAlert, XCircle } from 'lucide-react';
+import { Check, Clock, Loader2, MapPin, Navigation, Share2, ShieldAlert, Truck, Wrench, XCircle } from 'lucide-react';
 import { apiGet, apiPost, errorMessage } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import { DEFAULT_CONFIG, formatMoney } from '@rr/config';
@@ -75,7 +75,12 @@ export function RequestSession({ requestId }: { requestId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [liveMarker, setLiveMarker] = useState<{ latitude: number; longitude: number; role: string } | null>(null);
+  const [liveMarker, setLiveMarker] = useState<{
+    latitude: number;
+    longitude: number;
+    role: string;
+    at?: string | null;
+  } | null>(null);
   const [routeInfo, setRouteInfo] = useState<MapRouteInfo | null>(null);
   const [otpCopied, setOtpCopied] = useState(false);
 
@@ -139,6 +144,19 @@ export function RequestSession({ requestId }: { requestId: string }) {
         return;
       }
       setRequest(dto);
+      const seedLocation = dto.mechanicLocation;
+      if (seedLocation) {
+        setLiveMarker((prev) =>
+          prev?.at && new Date(prev.at).getTime() > new Date(seedLocation.at).getTime()
+            ? prev
+            : {
+                latitude: seedLocation.latitude,
+                longitude: seedLocation.longitude,
+                role: 'MECHANIC',
+                at: seedLocation.at,
+              },
+        );
+      }
       const list = Array.isArray(events) ? events : (events as { items?: TimelineEventDto[] }).items;
       setTimeline(list ?? []);
       apiGet<{ items?: DisputeDto[] }>(`/api/disputes?requestId=${requestId}`)
@@ -198,9 +216,26 @@ export function RequestSession({ requestId }: { requestId: string }) {
         void load();
       }
       if (message.type === 'mechanic.location' || message.type === 'request.location') {
-        const payload = message.payload as { latitude?: number; longitude?: number; source?: string };
-        if (typeof payload.latitude === 'number' && typeof payload.longitude === 'number') {
-          setLiveMarker({ latitude: payload.latitude, longitude: payload.longitude, role: payload.source ?? 'MECHANIC' });
+        const payload = message.payload as {
+          latitude?: number;
+          longitude?: number;
+          source?: string;
+          at?: string;
+        };
+        const latitude = payload.latitude;
+        const longitude = payload.longitude;
+        if (typeof latitude === 'number' && typeof longitude === 'number') {
+          setLiveMarker((prev) => {
+            if (prev?.at && payload.at && new Date(prev.at).getTime() > new Date(payload.at).getTime()) {
+              return prev;
+            }
+            return {
+              latitude,
+              longitude,
+              role: payload.source ?? 'MECHANIC',
+              at: payload.at ?? null,
+            };
+          });
         }
       }
       if (message.type === 'request.event') void load();
@@ -387,6 +422,7 @@ export function RequestSession({ requestId }: { requestId: string }) {
 
   const markers = useMemo<MapMarker[]>(() => {
     if (!request) return [];
+    const towing = (request.assignedMechanic?.skills ?? []).some((skill) => skill.toLowerCase() === 'towing');
     const list: MapMarker[] = [
       { id: 'request', latitude: request.latitude, longitude: request.longitude, tone: 'rose', label: 'Breakdown location', icon: <MapPin className="h-3.5 w-3.5" /> },
     ];
@@ -396,8 +432,16 @@ export function RequestSession({ requestId }: { requestId: string }) {
         latitude: liveMarker.latitude,
         longitude: liveMarker.longitude,
         tone: liveMarker.role === 'MECHANIC' ? 'emerald' : 'brand',
-        label: liveMarker.role === 'MECHANIC' ? 'Mechanic (live)' : 'Your location (live)',
-        icon: <Navigation className="h-3.5 w-3.5" />,
+        label:
+          liveMarker.role === 'MECHANIC'
+            ? `${request.assignedMechanic?.fullName ?? 'Mechanic'}${towing ? ' (tow truck)' : ''} (live)`
+            : 'Your location (live)',
+        icon:
+          towing && liveMarker.role === 'MECHANIC' ? (
+            <Truck className="h-3.5 w-3.5" />
+          ) : (
+            <Navigation className="h-3.5 w-3.5" />
+          ),
       });
     }
     return list;
@@ -442,6 +486,13 @@ export function RequestSession({ requestId }: { requestId: string }) {
     });
   };
 
+  const trackingActive =
+    Boolean(request.assignedMechanic) &&
+    ['ASSIGNED', 'MECHANIC_EN_ROUTE', 'MECHANIC_NEARBY', 'TOWING_REQUIRED'].includes(request.status);
+  const isTowing = Boolean(request.assignedMechanic?.skills.some((skill) => skill.toLowerCase() === 'towing'));
+  const liveEtaMin = routeInfo?.durationMin ?? request.assignedMechanic?.etaMinutes ?? null;
+  const liveEtaKm = routeInfo?.distanceKm ?? request.assignedMechanic?.distanceKm ?? null;
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center gap-2">
@@ -454,6 +505,47 @@ export function RequestSession({ requestId }: { requestId: string }) {
           {realtime.connected ? 'Live' : 'Reconnecting…'}
         </span>
       </div>
+
+      {trackingActive && request.assignedMechanic ? (
+        <Card className="border-emerald-200 bg-gradient-to-r from-emerald-50 to-white">
+          <CardContent className="flex items-center gap-4 py-4">
+            <span className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-white">
+              {isTowing ? <Truck className="h-6 w-6" /> : <Wrench className="h-6 w-6" />}
+              <span className="absolute -inset-1 animate-ping rounded-full bg-emerald-400/30" aria-hidden />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold text-ink">
+                {request.assignedMechanic.fullName}{' '}
+                {request.status === 'MECHANIC_NEARBY'
+                  ? isTowing
+                    ? 'is arriving with your tow truck'
+                    : 'is arriving now'
+                  : request.status === 'ASSIGNED'
+                    ? 'accepted your request'
+                    : isTowing
+                      ? 'is bringing your tow truck'
+                      : 'is on the way'}
+              </p>
+              <p className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <span className="inline-flex items-center gap-1 font-medium text-emerald-700">
+                  <span
+                    className={cn('h-1.5 w-1.5 rounded-full', realtime.connected ? 'bg-emerald-500' : 'bg-amber-400')}
+                  />
+                  {realtime.connected ? 'Live' : 'Updating…'}
+                </span>
+                {liveEtaMin !== null ? <span>· ~{liveEtaMin} min away</span> : null}
+                {liveEtaKm !== null ? <span>· {liveEtaKm} km</span> : null}
+              </p>
+            </div>
+            <a
+              href="#live-map"
+              className="shrink-0 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 shadow-sm transition-colors hover:bg-emerald-50"
+            >
+              View map
+            </a>
+          </CardContent>
+        </Card>
+      ) : null}
 
       <ProgressStrip status={request.status} />
 
@@ -512,42 +604,44 @@ export function RequestSession({ requestId }: { requestId: string }) {
 
       <div className="grid gap-5 lg:grid-cols-5">
         <div className="space-y-5 lg:col-span-3">
-          <Card>
-            <CardHeader>
-              <CardTitle>Live map</CardTitle>
-              <span className="text-xs text-slate-500">{request.address ?? 'Coordinates from GPS'}</span>
-            </CardHeader>
-            <CardContent>
-              <MapPanel
-                markers={markers}
-                height="h-72"
-                route={
-                  liveMarker && liveMarker.role === 'MECHANIC'
-                    ? {
-                        from: { latitude: liveMarker.latitude, longitude: liveMarker.longitude },
-                        to: { latitude: request.latitude, longitude: request.longitude },
-                      }
-                    : null
-                }
-                onRouteInfo={setRouteInfo}
-                mapsLink={`https://www.google.com/maps/search/?api=1&query=${request.latitude},${request.longitude}`}
-              />
-              {routeInfo ? (
-                <p className="mt-2 text-xs font-medium text-slate-600">
-                  Mechanic{' '}
-                  {[
-                    routeInfo.distanceKm !== null ? `~${routeInfo.distanceKm} km` : null,
-                    routeInfo.durationMin !== null ? `${routeInfo.durationMin} min away` : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
+          <div id="live-map" className="scroll-mt-24">
+            <Card>
+              <CardHeader>
+                <CardTitle>Live map</CardTitle>
+                <span className="text-xs text-slate-500">{request.address ?? 'Coordinates from GPS'}</span>
+              </CardHeader>
+              <CardContent>
+                <MapPanel
+                  markers={markers}
+                  height="h-72"
+                  route={
+                    liveMarker && liveMarker.role === 'MECHANIC'
+                      ? {
+                          from: { latitude: liveMarker.latitude, longitude: liveMarker.longitude },
+                          to: { latitude: request.latitude, longitude: request.longitude },
+                        }
+                      : null
+                  }
+                  onRouteInfo={setRouteInfo}
+                  mapsLink={`https://www.google.com/maps/search/?api=1&query=${request.latitude},${request.longitude}`}
+                />
+                {routeInfo ? (
+                  <p className="mt-2 text-xs font-medium text-slate-600">
+                    Mechanic{' '}
+                    {[
+                      routeInfo.distanceKm !== null ? `~${routeInfo.distanceKm} km` : null,
+                      routeInfo.durationMin !== null ? `${routeInfo.durationMin} min away` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </p>
+                ) : null}
+                <p className="mt-1 text-xs text-slate-500">
+                  {request.latitude.toFixed(5)}, {request.longitude.toFixed(5)}
                 </p>
-              ) : null}
-              <p className="mt-1 text-xs text-slate-500">
-                {request.latitude.toFixed(5)}, {request.longitude.toFixed(5)}
-              </p>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
 
           {quote && quote.status === 'PENDING' && job ? (
             <Card className="border-violet-200">

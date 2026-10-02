@@ -288,6 +288,22 @@ export async function loadRequestDto(
     assignedMechanic = await mapPublicMechanic(env, row.assigned_mechanic_user_id, row.latitude, row.longitude);
   }
 
+  // Latest position streamed by the assigned mechanic (posted ~every 10s while
+  // en route) so the driver's map is populated on load, not just via websocket.
+  let mechanicLocation: EmergencyRequestDto['mechanicLocation'] = null;
+  if (row.assigned_mechanic_user_id) {
+    const loc = await env.DB.prepare(
+      `SELECT latitude, longitude, recorded_at FROM emergency_locations
+        WHERE request_id = ? AND source = 'MECHANIC' AND actor_user_id = ?
+        ORDER BY recorded_at DESC LIMIT 1`,
+    )
+      .bind(requestId, row.assigned_mechanic_user_id)
+      .first<{ latitude: number; longitude: number; recorded_at: string }>();
+    if (loc) {
+      mechanicLocation = { latitude: loc.latitude, longitude: loc.longitude, at: loc.recorded_at };
+    }
+  }
+
   const jobRow = await env.DB.prepare(
     `SELECT j.*, u.full_name AS mechanic_name FROM jobs j
      JOIN users u ON u.id = j.mechanic_user_id
@@ -325,6 +341,7 @@ export async function loadRequestDto(
   }
 
   const dto = mapRequestRow(row, { assignedMechanic, job, quote, photos });
+  (dto as EmergencyRequestDto).mechanicLocation = mechanicLocation;
 
   // Job-start OTP for the driver: only while pending (hash set, not verified,
   // not expired). The plaintext lives in the driver's MECHANIC_ARRIVED

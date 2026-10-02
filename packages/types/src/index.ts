@@ -224,6 +224,8 @@ export interface EmergencyRequestDto {
   address: string | null;
   assignedMechanicUserId: string | null;
   assignedMechanic: MechanicPublicDto | null;
+  /** Latest live position streamed by the assigned mechanic (null until they share one). */
+  mechanicLocation?: { latitude: number; longitude: number; at: string } | null;
   /** Job-start OTP for the driver to share with the mechanic (pending only). */
   arrivalOtp?: string | null;
   arrivalOtpExpiresAt?: string | null;
